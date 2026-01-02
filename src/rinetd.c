@@ -736,6 +736,19 @@ static void tcp_trigger_write(ConnectionInfo *cnx, Socket *socket,
 		return;  /* Nothing to send */
 	}
 
+	/* Check if the handle we're writing to is closing */
+	int is_closing = 0;
+	if (socket == &cnx->local) {
+		is_closing = cnx->local_handle_closing;
+	} else {
+		is_closing = cnx->remote_handle_closing;
+	}
+
+	if (is_closing || uv_is_closing((uv_handle_t*)stream)) {
+		/* Handle is closing, don't try to write */
+		return;
+	}
+
 	uv_write_t *req = malloc(sizeof(uv_write_t));
 	if (!req) {
 		logError("malloc failed for write request\n");
@@ -897,6 +910,12 @@ static void udp_trigger_write_to_local(ConnectionInfo *cnx)
 		return;  /* Nothing to send */
 	}
 
+	/* Check if local handle is closing */
+	if (cnx->local_handle_closing || !cnx->local_handle_initialized ||
+	    uv_is_closing((uv_handle_t*)&cnx->local_uv_handle.udp)) {
+		return;  /* Handle is closing, don't try to send */
+	}
+
 	int to_send = cnx->remote.recvPos - cnx->local.sentPos;
 	uv_buf_t wrbuf = uv_buf_init(cnx->remote.buffer + cnx->local.sentPos, to_send);
 
@@ -923,6 +942,17 @@ static void udp_trigger_write_to_remote(ConnectionInfo *cnx)
 		return;  /* Nothing to send */
 	}
 
+	/* Cast away const - we're not modifying ServerInfo, just using its handle for I/O */
+	ServerInfo *srv = (ServerInfo *)cnx->server;
+	if (!srv) {
+		return;  /* Server may have been cleared during config reload */
+	}
+
+	/* Check if server UDP handle is closing */
+	if (!srv->handle_initialized || uv_is_closing((uv_handle_t*)&srv->uv_handle.udp)) {
+		return;  /* Handle is closing, don't try to send */
+	}
+
 	int to_send = cnx->local.recvPos - cnx->remote.sentPos;
 	uv_buf_t wrbuf = uv_buf_init(cnx->local.buffer + cnx->remote.sentPos, to_send);
 
@@ -934,8 +964,6 @@ static void udp_trigger_write_to_remote(ConnectionInfo *cnx)
 
 	req->data = cnx;
 
-	/* Cast away const - we're not modifying ServerInfo, just using its handle for I/O */
-	ServerInfo *srv = (ServerInfo *)cnx->server;
 	int ret = uv_udp_send(req, &srv->uv_handle.udp, &wrbuf, 1,
 	                      (struct sockaddr*)&cnx->remoteAddress, udp_send_cb);
 	if (ret != 0) {
@@ -1157,6 +1185,7 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 	/* Close the socket's libuv handle */
 	if (socket->fd != INVALID_SOCKET) {
 		uv_handle_t *handle = NULL;
+		int *closing_flag = NULL;
 
 		if (socket == &cnx->local && cnx->local_handle_initialized) {
 			if (cnx->local_handle_type == UV_TCP) {
@@ -1164,15 +1193,18 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 			} else {
 				handle = (uv_handle_t*)&cnx->local_uv_handle.udp;
 			}
+			closing_flag = &cnx->local_handle_closing;
 		} else if (socket == &cnx->remote && cnx->remote_handle_initialized) {
 			if (cnx->remote_handle_type == UV_TCP) {
 				handle = (uv_handle_t*)&cnx->remote_uv_handle.tcp;
 			} else {
 				handle = (uv_handle_t*)&cnx->remote_uv_handle.udp;
 			}
+			closing_flag = &cnx->remote_handle_closing;
 		}
 
-		if (handle && !uv_is_closing(handle)) {
+		if (handle && closing_flag && !(*closing_flag) && !uv_is_closing(handle)) {
+			*closing_flag = 1;  /* Set BEFORE calling uv_close() */
 			uv_close(handle, handle_close_cb);
 		}
 
@@ -1180,7 +1212,8 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 	}
 
 	/* Close timer if active */
-	if (cnx->timer_initialized && !uv_is_closing((uv_handle_t*)&cnx->timeout_timer)) {
+	if (cnx->timer_initialized && !cnx->timer_closing && !uv_is_closing((uv_handle_t*)&cnx->timeout_timer)) {
+		cnx->timer_closing = 1;  /* Set BEFORE calling uv_close() */
 		uv_close((uv_handle_t*)&cnx->timeout_timer, handle_close_cb);
 	}
 
@@ -1192,7 +1225,8 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 			if (cnx->local_handle_initialized) {
 				handle = (uv_handle_t*)&cnx->local_uv_handle.udp;
 			}
-			if (handle && !uv_is_closing(handle)) {
+			if (handle && !cnx->local_handle_closing && !uv_is_closing(handle)) {
+				cnx->local_handle_closing = 1;  /* Set BEFORE calling uv_close() */
 				uv_close(handle, handle_close_cb);
 			}
 			other_socket->fd = INVALID_SOCKET;
