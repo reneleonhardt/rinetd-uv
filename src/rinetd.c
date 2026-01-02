@@ -1203,9 +1203,15 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 		cnx->coLog = (socket == &cnx->local) ?
 			logLocalClosedFirst : logRemoteClosedFirst;
 		logEvent(cnx, cnx->server, cnx->coLog);
+		cnx->coClosing = 1;
 	}
-
-	cnx->coClosing = 1;
+#ifdef DEBUG
+	else {
+		/* Duplicate close detected - log for debugging */
+		logError("handleClose called again on already-closing connection %p (coClosing=%d)\n",
+		         (void*)cnx, cnx->coClosing);
+	}
+#endif
 
 	/* Close the socket's libuv handle */
 	if (socket->fd != INVALID_SOCKET) {
@@ -1257,9 +1263,6 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 			other_socket->fd = INVALID_SOCKET;
 		}
 		/* For TCP, the connection will close gracefully after pending writes complete */
-
-		cnx->coLog = socket == &cnx->local ?
-			logLocalClosedFirst : logRemoteClosedFirst;
 	}
 }
 
