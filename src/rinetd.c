@@ -466,6 +466,8 @@ static ConnectionInfo *allocateConnection(void)
 	cnx->coClosing = 0;
 	cnx->coLog = logUnknownError;
 	cnx->pending_writes = 0;
+	cnx->local_write_in_progress = 0;
+	cnx->remote_write_in_progress = 0;
 
 	/* Add to linked list */
 	cnx->next = connectionListHead;
@@ -815,6 +817,19 @@ static void tcp_trigger_write(ConnectionInfo *cnx, Socket *socket,
 		return;  /* Nothing to send */
 	}
 
+	/* Check if a write is already in progress for this socket */
+	int *write_in_progress = NULL;
+	if (socket == &cnx->local) {
+		write_in_progress = &cnx->local_write_in_progress;
+	} else {
+		write_in_progress = &cnx->remote_write_in_progress;
+	}
+
+	if (write_in_progress && *write_in_progress) {
+		/* Write already in progress, don't queue another */
+		return;
+	}
+
 	/* Check if the handle we're writing to is closing */
 	int is_closing = 0;
 	if (socket == &cnx->local) {
@@ -838,14 +853,29 @@ static void tcp_trigger_write(ConnectionInfo *cnx, Socket *socket,
 	/* Store connection info for callback */
 	req->data = cnx;
 
+	/* Mark write as in progress */
+	if (write_in_progress) {
+		*write_in_progress = 1;
+	}
+
+	/* Increment pending writes counter */
+	cnx->pending_writes++;
+
 	int to_send = other_socket->recvPos - socket->sentPos;
 	uv_buf_t wrbuf = uv_buf_init(other_socket->buffer + socket->sentPos, to_send);
 
 	int ret = uv_write(req, stream, &wrbuf, 1, tcp_write_cb);
 	if (ret != 0) {
 		logError("uv_write error: %s\n", uv_strerror(ret));
+		/* Clear write in progress flag */
+		if (write_in_progress) {
+			*write_in_progress = 0;
+		}
+		/* Decrement counter since write failed immediately */
+		cnx->pending_writes--;
 		free(req);
 		handleClose(cnx, socket, other_socket);
+		return;
 	}
 }
 
@@ -905,13 +935,21 @@ static void tcp_write_cb(uv_write_t *req, int status)
 	/* Determine which socket based on the handle */
 	Socket *socket, *other_socket;
 	uv_stream_t *stream = req->handle;
+	int *write_in_progress = NULL;
 
 	if (stream == (uv_stream_t*)&cnx->local_uv_handle.tcp) {
 		socket = &cnx->local;
 		other_socket = &cnx->remote;
+		write_in_progress = &cnx->local_write_in_progress;
 	} else {
 		socket = &cnx->remote;
 		other_socket = &cnx->local;
+		write_in_progress = &cnx->remote_write_in_progress;
+	}
+
+	/* Clear write in progress flag */
+	if (write_in_progress) {
+		*write_in_progress = 0;
 	}
 
 	free(req);
