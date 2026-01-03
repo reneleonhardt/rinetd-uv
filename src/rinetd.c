@@ -72,6 +72,7 @@ int maxfd = 0;
 
 /* libuv event loop */
 static uv_loop_t *main_loop = NULL;
+static int should_exit = 0;  /* Flag to signal graceful shutdown */
 
 /* libuv signal handlers */
 static uv_signal_t sighup_handle, sigint_handle, sigterm_handle, sigpipe_handle;
@@ -214,15 +215,26 @@ int main(int argc, char *argv[])
 	logInfo("starting redirections...\n");
 
 	/* Run the event loop */
-	while (1) {
+	while (!should_exit) {
 		int ret = uv_run(main_loop, UV_RUN_DEFAULT);
 		if (ret == 0) {
-			/* No more active handles/requests, but we want to keep running */
+			/* No more active handles/requests */
+			if (should_exit) {
+				/* Graceful shutdown requested */
+				break;
+			}
 			/* This shouldn't normally happen since servers are always listening */
 			logError("event loop finished unexpectedly\n");
 			break;
 		}
 	}
+
+	/* Close all remaining handles gracefully */
+	uv_walk(main_loop, (uv_walk_cb)uv_close, NULL);
+	uv_run(main_loop, UV_RUN_DEFAULT);  /* Process close callbacks */
+
+	/* Close the loop */
+	uv_loop_close(main_loop);
 
 	return 0;
 }
