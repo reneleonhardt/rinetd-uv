@@ -643,6 +643,7 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
 	                        alloc_buffer_cb, tcp_read_cb);
 	if (ret != 0) {
 		logError("uv_read_start (local) error: %s\n", uv_strerror(ret));
+		/* Close both handles - local read failed, remote never started */
 		handleClose(cnx, &cnx->local, &cnx->remote);
 		return;
 	}
@@ -652,6 +653,9 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
 	                    alloc_buffer_cb, tcp_read_cb);
 	if (ret != 0) {
 		logError("uv_read_start (remote) error: %s\n", uv_strerror(ret));
+		/* Stop reading on local handle since remote read failed */
+		uv_read_stop((uv_stream_t*)&cnx->local_uv_handle.tcp);
+		/* Close both handles */
 		handleClose(cnx, &cnx->local, &cnx->remote);
 		return;
 	}
