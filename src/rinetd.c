@@ -700,6 +700,8 @@ static void tcp_server_accept_cb(uv_stream_t *server, int status)
 	cnx->coClosing = 0;
 	cnx->coLog = logUnknownError;
 	cnx->pending_writes = 0;
+	cnx->local_write_in_progress = 0;
+	cnx->remote_write_in_progress = 0;
 	cnx->server = srv;
 	cnx->timer_initialized = 0;
 

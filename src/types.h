@@ -98,6 +98,8 @@ struct _connection_info
 
 	/* Reference counting for pending operations */
 	int pending_writes;  /* Number of pending write operations */
+	int local_write_in_progress;  /* Flag: write in progress on local socket */
+	int remote_write_in_progress;  /* Flag: write in progress on remote socket */
 
 	/* Linked list for tracking active connections */
 	struct _connection_info *next;
