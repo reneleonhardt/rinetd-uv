@@ -510,8 +510,10 @@ static void signal_cb(uv_signal_t *handle, int signum)
 		hup(signum);
 	} else if (signum == SIGINT || signum == SIGTERM) {
 		quit(signum);
+	} else if (signum == SIGPIPE) {
+		/* SIGPIPE is ignored (no-op callback) */
+		/* This prevents the process from terminating on broken pipes */
 	}
-	/* SIGPIPE is ignored (like SIG_IGN) */
 }
 
 /* Initialize and start libuv event handling for a server */
