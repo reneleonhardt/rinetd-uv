@@ -901,6 +901,11 @@ static void tcp_read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 	(void)buf;  /* Unused parameter - data already in socket buffer */
 	ConnectionInfo *cnx = (ConnectionInfo*)stream->data;
 
+	/* Defensive null check */
+	if (!cnx) {
+		return;
+	}
+
 	/* Determine which socket and the other socket */
 	Socket *socket, *other_socket;
 	uv_stream_t *other_stream;
