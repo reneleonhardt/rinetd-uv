@@ -960,19 +960,15 @@ static void handle_close_cb(uv_handle_t *handle)
 	}
 
 	/* Check if all handles are closed - if so, free the connection */
+	/* IMPORTANT: Check all handles are closed BEFORE clearing data pointers.
+	   This prevents race conditions where another callback might access the
+	   connection after data is cleared but before the connection is freed. */
 	if (!cnx->local_handle_initialized && !cnx->local_handle_closing &&
 	    !cnx->remote_handle_initialized && !cnx->remote_handle_closing &&
 	    !cnx->timer_initialized && !cnx->timer_closing) {
-		/* All handles are closed - remove from list and free */
+		/* All handles are closed - safe to free the connection */
 
-		/* IMPORTANT: Clear all handle->data pointers BEFORE freeing to prevent
-		   race condition where another callback tries to free the same connection.
-		   This makes subsequent callbacks return early at the !handle->data check. */
-		cnx->local_uv_handle.tcp.data = NULL;   /* Union - sets both tcp.data and udp.data */
-		cnx->remote_uv_handle.tcp.data = NULL;  /* Union - sets both tcp.data and udp.data */
-		cnx->timeout_timer.data = NULL;
-
-		/* Remove from linked list */
+		/* Remove from linked list first */
 		ConnectionInfo **ptr = &connectionListHead;
 		while (*ptr) {
 			if (*ptr == cnx) {
@@ -983,6 +979,14 @@ static void handle_close_cb(uv_handle_t *handle)
 		}
 
 		activeConnections--;
+
+		/* Clear all handle->data pointers AFTER removing from list but BEFORE freeing.
+		   This ensures any subsequent callbacks will see NULL and return early. */
+		cnx->local_uv_handle.tcp.data = NULL;   /* Union - sets both tcp.data and udp.data */
+		cnx->remote_uv_handle.tcp.data = NULL;  /* Union - sets both tcp.data and udp.data */
+		cnx->timeout_timer.data = NULL;
+
+		/* Now safe to free the connection */
 		free(cnx->local.buffer);  /* This also frees remote.buffer */
 		free(cnx);
 	}
