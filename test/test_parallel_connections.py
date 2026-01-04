@@ -5,6 +5,7 @@ Tests concurrent HTTP requests and validates responses.
 
 Usage:
     python3 test_parallel_connections.py [--host HOST] [--port PORT] [--connections N]
+                                         [--resource URL:SHA256]
 
 Examples:
     # Test with defaults (127.0.0.1:8080, 100 connections)
@@ -15,6 +16,9 @@ Examples:
 
     # Stress test: keep connecting for 60 seconds with 50 parallel connections
     python3 test_parallel_connections.py --duration 60 --connections 50
+
+    # Validate specific resource with SHA256 checksum
+    python3 test_parallel_connections.py --resource /index.html:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 """
 
 import socket
@@ -22,16 +26,20 @@ import threading
 import time
 import sys
 import argparse
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+try:
+    import requests
+except ImportError:
+    print("Error: 'requests' library is required. Install it with: pip install requests")
+    sys.exit(1)
 
 # Default configuration
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
 DEFAULT_CONNECTIONS = 100
 DEFAULT_TIMEOUT = 10
-
-# HTTP request template
-HTTP_REQUEST = b"GET / HTTP/1.0\r\nHost: test\r\n\r\n"
 
 # Test results
 results = {
@@ -42,47 +50,33 @@ results = {
 results_lock = threading.Lock()
 
 
-def test_connection(conn_id, host, port, timeout):
-    """Test a single HTTP connection through rinetd."""
-    try:
-        # Create socket and connect
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
+def test_connection(conn_id, host, port, timeout, resource_path=None, expected_sha256=None):
+    """Test a single HTTP connection through rinetd.
 
+    Args:
+        conn_id: Connection identifier
+        host: Target host
+        port: Target port
+        timeout: Request timeout in seconds
+        resource_path: Optional resource path to fetch (e.g., '/index.html')
+        expected_sha256: Optional expected SHA256 hash of the resource body
+    """
+    try:
         start_time = time.time()
-        sock.connect((host, port))
+
+        # Construct URL
+        if resource_path:
+            url = f"http://{host}:{port}{resource_path}"
+        else:
+            url = f"http://{host}:{port}/"
+
+        # Make HTTP request using requests library
+        response = requests.get(url, timeout=timeout)
         connect_time = time.time() - start_time
 
-        # Send HTTP request
-        sock.sendall(HTTP_REQUEST)
-
-        # Read response - just the first line for validation
-        response = b""
-        while b"\r\n" not in response and len(response) < 1024:
-            chunk = sock.recv(256)
-            if not chunk:
-                break
-            response += chunk
-
-        sock.close()
-
-        # Validate response
-        response_str = response.decode('utf-8', errors='ignore')
-        first_line = response_str.split('\r\n')[0] if '\r\n' in response_str else response_str
-
-        # Check if it's a valid HTTP response
-        if first_line.startswith('HTTP/1.'):
-            with results_lock:
-                results['success'] += 1
-            return {
-                'id': conn_id,
-                'success': True,
-                'connect_time': connect_time,
-                'first_line': first_line,
-                'response_length': len(response)
-            }
-        else:
-            error_msg = f"Invalid HTTP response: {first_line[:50]}"
+        # Check HTTP status
+        if response.status_code != 200:
+            error_msg = f"HTTP {response.status_code}"
             with results_lock:
                 results['failed'] += 1
                 results['errors'].append(error_msg)
@@ -92,7 +86,38 @@ def test_connection(conn_id, host, port, timeout):
                 'error': error_msg
             }
 
-    except socket.timeout:
+        # If resource validation is requested, verify SHA256
+        if expected_sha256:
+            actual_sha256 = hashlib.sha256(response.content).hexdigest()
+            if actual_sha256 != expected_sha256:
+                error_msg = f"SHA256 mismatch: expected {expected_sha256[:16]}..., got {actual_sha256[:16]}..."
+                with results_lock:
+                    results['failed'] += 1
+                    results['errors'].append(error_msg)
+                return {
+                    'id': conn_id,
+                    'success': False,
+                    'error': error_msg
+                }
+
+        # Success
+        with results_lock:
+            results['success'] += 1
+
+        result = {
+            'id': conn_id,
+            'success': True,
+            'connect_time': connect_time,
+            'status_code': response.status_code,
+            'response_length': len(response.content)
+        }
+
+        if expected_sha256:
+            result['sha256_valid'] = True
+
+        return result
+
+    except requests.exceptions.Timeout:
         error_msg = 'Timeout'
         with results_lock:
             results['failed'] += 1
@@ -102,8 +127,8 @@ def test_connection(conn_id, host, port, timeout):
             'success': False,
             'error': error_msg
         }
-    except ConnectionRefusedError:
-        error_msg = 'Connection refused'
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f'Connection error: {str(e)}'
         with results_lock:
             results['failed'] += 1
             results['errors'].append(error_msg)
@@ -113,7 +138,7 @@ def test_connection(conn_id, host, port, timeout):
             'error': error_msg
         }
     except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}"
+        error_msg = f"{type(e).__name__}: {str(e)}"
         with results_lock:
             results['failed'] += 1
             results['errors'].append(error_msg)
@@ -188,14 +213,15 @@ def print_test_results(elapsed, extra_stats=None):
         return 1
 
 
-def continuous_worker(worker_id, host, port, timeout, end_time, conn_counter, conn_counter_lock):
+def continuous_worker(worker_id, host, port, timeout, end_time, conn_counter, conn_counter_lock,
+                      resource_path=None, expected_sha256=None):
     """Worker thread that continuously makes connections until end_time."""
     while time.time() < end_time:
         with conn_counter_lock:
             conn_id = conn_counter[0]
             conn_counter[0] += 1
 
-        test_connection(conn_id, host, port, timeout)
+        test_connection(conn_id, host, port, timeout, resource_path, expected_sha256)
 
 
 def run_continuous_test(args):
@@ -218,13 +244,20 @@ def run_continuous_test(args):
     conn_counter = [0]
     conn_counter_lock = threading.Lock()
 
+    # Parse resource if provided
+    resource_path = None
+    expected_sha256 = None
+    if hasattr(args, 'resource') and args.resource:
+        resource_path, expected_sha256 = args.resource
+
     # Start worker threads
     workers = []
     try:
         for i in range(args.connections):
             worker = threading.Thread(
                 target=continuous_worker,
-                args=(i, args.host, args.port, args.timeout, end_time, conn_counter, conn_counter_lock),
+                args=(i, args.host, args.port, args.timeout, end_time, conn_counter, conn_counter_lock,
+                      resource_path, expected_sha256),
                 daemon=True
             )
             worker.start()
@@ -273,9 +306,16 @@ def run_single_batch_test(args):
     print(f"Starting {args.connections} parallel connections...")
     start_time = time.time()
 
+    # Parse resource if provided
+    resource_path = None
+    expected_sha256 = None
+    if hasattr(args, 'resource') and args.resource:
+        resource_path, expected_sha256 = args.resource
+
     # Execute parallel connections
     with ThreadPoolExecutor(max_workers=args.connections) as executor:
-        futures = [executor.submit(test_connection, i, args.host, args.port, args.timeout)
+        futures = [executor.submit(test_connection, i, args.host, args.port, args.timeout,
+                                   resource_path, expected_sha256)
                    for i in range(args.connections)]
 
         # Progress indicator
@@ -292,6 +332,26 @@ def run_single_batch_test(args):
 
     # Print results
     return print_test_results(elapsed)
+
+
+def parse_resource(value):
+    """Parse --resource argument in format 'url:sha256sum'."""
+    if ':' not in value:
+        raise argparse.ArgumentTypeError(
+            "Resource must be in format 'url:sha256sum' (e.g., '/index.html:abc123...')"
+        )
+
+    parts = value.split(':', 1)
+    url = parts[0]
+    sha256sum = parts[1]
+
+    # Validate SHA256 format (64 hex characters)
+    if len(sha256sum) != 64 or not all(c in '0123456789abcdefABCDEF' for c in sha256sum):
+        raise argparse.ArgumentTypeError(
+            f"Invalid SHA256 hash: {sha256sum}. Must be 64 hexadecimal characters."
+        )
+
+    return (url, sha256sum.lower())
 
 
 def main():
@@ -313,6 +373,9 @@ def main():
                         help=f'socket timeout in seconds (default: {DEFAULT_TIMEOUT})')
     parser.add_argument('--quiet', action='store_true',
                         help='suppress progress output')
+    parser.add_argument('--resource', type=parse_resource, metavar='URL:SHA256',
+                        help='validate resource: fetch URL and verify SHA256 hash '
+                             '(e.g., /index.html:abc123...)')
 
     args = parser.parse_args()
 
@@ -323,6 +386,10 @@ def main():
     if args.duration > 0:
         print(f"Duration: {args.duration}s (continuous mode)")
     print(f"Timeout: {args.timeout}s")
+    if args.resource:
+        resource_url, resource_sha256 = args.resource
+        print(f"Resource validation: {resource_url}")
+        print(f"Expected SHA256: {resource_sha256}")
     print(f"=" * 60)
     print()
 
