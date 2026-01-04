@@ -480,6 +480,8 @@ static ConnectionInfo *allocateConnection(void)
 	cnx->pending_writes = 0;
 	cnx->local_write_in_progress = 0;
 	cnx->remote_write_in_progress = 0;
+	cnx->local_read_active = 0;
+	cnx->remote_read_active = 0;
 
 	/* Add to linked list */
 	cnx->next = connectionListHead;
@@ -650,6 +652,7 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
 		handleClose(cnx, &cnx->local, &cnx->remote);
 		return;
 	}
+	cnx->local_read_active = 1;
 
 	/* NOW start reading from remote (client) - backend is connected */
 	ret = uv_read_start((uv_stream_t*)&cnx->remote_uv_handle.tcp,
@@ -658,10 +661,12 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
 		logError("uv_read_start (remote) error: %s\n", uv_strerror(ret));
 		/* Stop reading on local handle since remote read failed */
 		uv_read_stop((uv_stream_t*)&cnx->local_uv_handle.tcp);
+		cnx->local_read_active = 0;
 		/* Close both handles */
 		handleClose(cnx, &cnx->local, &cnx->remote);
 		return;
 	}
+	cnx->remote_read_active = 1;
 
 	logEvent(cnx, cnx->server, logOpened);
 }
@@ -938,6 +943,18 @@ static void tcp_read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 	socket->recvPos += nread;
 	socket->totalBytesIn += nread;
 
+	/* Flow control: stop reading if buffer is getting full (>75% full) */
+	if (socket->recvPos > (RINETD_BUFFER_SIZE * 3 / 4)) {
+		int *read_active = (socket == &cnx->local)
+			? &cnx->local_read_active
+			: &cnx->remote_read_active;
+
+		if (read_active && *read_active) {
+			uv_read_stop(stream);
+			*read_active = 0;
+		}
+	}
+
 	/* Trigger write to other socket */
 	tcp_trigger_write(cnx, other_socket, socket, other_stream);
 }
@@ -992,6 +1009,31 @@ static void tcp_write_cb(uv_write_t *req, int status)
 	/* Reset buffers if all sent */
 	if (socket->sentPos == other_socket->recvPos) {
 		socket->sentPos = other_socket->recvPos = 0;
+
+		/* Flow control: resume reading on other socket if it was stopped */
+		uv_stream_t *other_stream = (other_socket == &cnx->local)
+			? (uv_stream_t*)&cnx->local_uv_handle.tcp
+			: (uv_stream_t*)&cnx->remote_uv_handle.tcp;
+
+		int *other_read_active = (other_socket == &cnx->local)
+			? &cnx->local_read_active
+			: &cnx->remote_read_active;
+
+		int *other_handle_closing = (other_socket == &cnx->local)
+			? &cnx->local_handle_closing
+			: &cnx->remote_handle_closing;
+
+		if (other_read_active && !(*other_read_active) &&
+		    other_handle_closing && !(*other_handle_closing) &&
+		    !uv_is_closing((uv_handle_t*)other_stream)) {
+			/* Resume reading */
+			int ret = uv_read_start(other_stream, alloc_buffer_cb, tcp_read_cb);
+			if (ret == 0) {
+				*other_read_active = 1;
+			} else {
+				logError("uv_read_start resume error: %s\n", uv_strerror(ret));
+			}
+		}
 	}
 
 	/* Close if pending and buffer flushed */
@@ -1444,6 +1486,12 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 			/* Stop reading/recv before closing (libuv best practice) */
 			if (socket->protocol == IPPROTO_TCP) {
 				uv_read_stop((uv_stream_t*)handle);
+				/* Clear read active flag */
+				if (socket == &cnx->local) {
+					cnx->local_read_active = 0;
+				} else {
+					cnx->remote_read_active = 0;
+				}
 			} else if (socket->protocol == IPPROTO_UDP) {
 				uv_udp_recv_stop((uv_udp_t*)handle);
 			}
