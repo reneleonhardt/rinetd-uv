@@ -4,7 +4,7 @@ AUTOMAKE_OPTIONS = foreign dist-bzip2
 SUBDIRS = src
 
 EXTRA_DIST = bootstrap COPYING CHANGES.md README.md DOCUMENTATION.md BUILD.md \
-	BUFFER_OPTIMIZATION.md TCP-UDP_MIXED_MODE.md CLEANUP_SUMMARY.md \
+	TCP-UDP_MIXED_MODE.md \
 	index.html rinetd.vcxproj generate-manpage.sh generate-html.sh \
 	$(man_MANS) $(sysconf_DATA)
 

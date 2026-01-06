@@ -16,7 +16,7 @@ rinetd-uv -v
 
 **rinetd-uv** redirects TCP or UDP connections from one IP address and port to another. **rinetd-uv** is a single-process server which handles any number of connections to the address/port pairs specified in the file `/etc/rinetd-uv.conf`. Since **rinetd-uv** runs as a single process using nonblocking I/O (via libuv event loop), it is able to redirect a large number of connections without a severe impact on the machine. This makes it practical to run services on machines inside an IP masquerading firewall.
 
-### LIBUV VERSION
+### Libuv
 
 **rinetd-uv** is a modernized implementation of the original rinetd daemon, rewritten to use the libuv event loop library. While maintaining backward compatibility with the original rinetd configuration format, rinetd-uv features a completely rewritten internal architecture.
 
@@ -207,28 +207,44 @@ This allow rule matches all IP addresses in the 206.125.69 class C domain.
 ## EXAMPLE CONFIGURATION
 
 ```
-# Global settings
+# rinetd-uv.conf - example configuration
+
+# Global options
 logfile /var/log/rinetd-uv.log
-buffersize 32768
+# logcommon  # Use Apache-style logging
+
+# PID file
 pidfile /var/run/rinetd-uv.pid
 
-# Global access control
-allow 192.168.*
-deny *
+# Buffer size configuration (1KB - 1MB, default: 65536)
+# Smaller values reduce memory usage and latency, larger values improve throughput
+buffersize 65536  # 64KB is the default
 
-# TCP forwarding
+# Global Access Control:
+# You may specify global allow and deny rules here.
+# Only ip addresses are matched, hostnames cannot be specified here.
+# The wildcards you may use are * and ?
+#
+allow 192.168.2.*
+deny 192.168.2.1?
+allow fe80:*
+deny 2001:618:*:e43f
+
+# Forwarding options:
+# Format: bindaddress bindport connectaddress connectport [options]
+# Options: [timeout=seconds,src=sourceaddress]
+
+# TCP forwarding examples
 0.0.0.0 80 192.168.1.10 8080
-0.0.0.0 443 192.168.1.10 8443
+0.0.0.0 443 192.168.1.10 8443 [src=192.168.1.1]
 
-# UDP forwarding (DNS)
+# UDP forwarding example
 0.0.0.0 53/udp 8.8.8.8 53/udp [timeout=30]
 
-# Forwarding with source address binding
-192.168.1.1 3306 10.1.1.50 3306 [src=192.168.1.100]
-
-# Per-rule access control
+# Per-rule Access Control (applies to previous forwarding rule)
 0.0.0.0 22 192.168.1.20 22
 allow 10.0.0.*
+
 ```
 
 ## REINITIALIZING RINETD-UV
@@ -251,8 +267,9 @@ killall -HUP rinetd-uv
 
 The server redirected to is not able to identify the host the client really came from. This cannot be corrected; however, the log produced by **rinetd-uv** provides a way to obtain this information.
 
+Two rules with the same source ip/port and different destination ip/port are not allowed (you'll get "Address already in use" or similar error). Note that `0.0.0.0` (IPv4) and `::` (IPv6) effectively mean the same (both would bind to "any" address).
 
-### INCOMPATIBILITIES
+### Incompatibilities
 
 **rinetd-uv** was meant as drop-in replacement for **rinetd**, although there are some differences
 
@@ -309,12 +326,12 @@ This implementation was created with support of assorted LLM agents (Claude Opus
 
 ## SEE ALSO
 
-### LINKS
+### Links
 
 - rinetd-uv: https://github.com/marcin-gryszkalis/rinetd
 - original rinetd: https://github.com/samhocevar/rinetd
 
-### ADDITIONAL DOCUMENTATION
+### Additional Documentation
 
-- `BUILD.md` - Build requirements and instructions
-- `TCP-UDP_MIXED_MODE.md` - Technical analysis of mixed-mode limitations
+- [[BUILD.md]] - Build requirements and instructions
+- [[TCP-UDP_MIXED_MODE.md]] - Technical analysis of mixed-mode limitations

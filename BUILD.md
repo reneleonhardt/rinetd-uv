@@ -100,7 +100,7 @@ Run the configure script to detect system capabilities and create Makefiles:
 **Example with custom prefix:**
 
 ```bash
-./configure --prefix=/opt/rinetd --sysconfdir=/etc
+./configure --prefix=/opt/rinetd-uv --sysconfdir=/etc
 ```
 
 **Example with debug flags:**

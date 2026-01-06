@@ -22,7 +22,7 @@ I/O (via libuv event loop), it is able to redirect a large number of
 connections without a severe impact on the machine.
 This makes it practical to run services on machines inside an IP
 masquerading firewall.
-.SS LIBUV VERSION
+.SS Libuv
 \f[B]rinetd\-uv\f[R] is a modernized implementation of the original
 rinetd daemon, rewritten to use the libuv event loop library.
 While maintaining backward compatibility with the original rinetd
@@ -272,26 +272,41 @@ connections would be forced to pause during the address lookup.
 .SS EXAMPLE CONFIGURATION
 .IP
 .EX
-# Global settings
+# rinetd\-uv.conf \- example configuration
+
+# Global options
 logfile /var/log/rinetd\-uv.log
-buffersize 32768
+# logcommon  # Use Apache\-style logging
+
+# PID file
 pidfile /var/run/rinetd\-uv.pid
 
-# Global access control
-allow 192.168.*
-deny *
+# Buffer size configuration (1KB \- 1MB, default: 65536)
+# Smaller values reduce memory usage and latency, larger values improve throughput
+buffersize 65536  # 64KB is the default
 
-# TCP forwarding
+# Global Access Control:
+# You may specify global allow and deny rules here.
+# Only ip addresses are matched, hostnames cannot be specified here.
+# The wildcards you may use are * and ?
+#
+allow 192.168.2.*
+deny 192.168.2.1?
+allow fe80:*
+deny 2001:618:*:e43f
+
+# Forwarding options:
+# Format: bindaddress bindport connectaddress connectport [options]
+# Options: [timeout=seconds,src=sourceaddress]
+
+# TCP forwarding examples
 0.0.0.0 80 192.168.1.10 8080
-0.0.0.0 443 192.168.1.10 8443
+0.0.0.0 443 192.168.1.10 8443 [src=192.168.1.1]
 
-# UDP forwarding (DNS)
+# UDP forwarding example
 0.0.0.0 53/udp 8.8.8.8 53/udp [timeout=30]
 
-# Forwarding with source address binding
-192.168.1.1 3306 10.1.1.50 3306 [src=192.168.1.100]
-
-# Per\-rule access control
+# Per\-rule Access Control (applies to previous forwarding rule)
 0.0.0.0 22 192.168.1.20 22
 allow 10.0.0.*
 .EE
@@ -317,7 +332,13 @@ The server redirected to is not able to identify the host the client
 really came from.
 This cannot be corrected; however, the log produced by
 \f[B]rinetd\-uv\f[R] provides a way to obtain this information.
-.SS INCOMPATIBILITIES
+.PP
+Two rules with the same source ip/port and different destination ip/port
+are not allowed (you\[cq]ll get \[lq]Address already in use\[rq] or
+similar error).
+Note that \f[CR]0.0.0.0\f[R] (IPv4) and \f[CR]::\f[R] (IPv6) effectively
+mean the same (both would bind to \[lq]any\[rq] address).
+.SS Incompatibilities
 \f[B]rinetd\-uv\f[R] was meant as drop\-in replacement for
 \f[B]rinetd\f[R], although there are some differences
 .IP \[bu] 2
@@ -384,14 +405,14 @@ This implementation was created with support of assorted LLM agents
 (Claude Opus, Claude Sonnet, Gemini, GPT).
 The architecure and code was reviewed by human.
 .SS SEE ALSO
-.SS LINKS
+.SS Links
 .IP \[bu] 2
 rinetd\-uv: https://github.com/marcin\-gryszkalis/rinetd
 .IP \[bu] 2
 original rinetd: https://github.com/samhocevar/rinetd
-.SS ADDITIONAL DOCUMENTATION
+.SS Additional Documentation
 .IP \[bu] 2
-\f[CR]BUILD.md\f[R] \- Build requirements and instructions
+[[BUILD.md]] \- Build requirements and instructions
 .IP \[bu] 2
-\f[CR]TCP\-UDP_MIXED_MODE.md\f[R] \- Technical analysis of mixed\-mode
+[[TCP\-UDP_MIXED_MODE.md]] \- Technical analysis of mixed\-mode
 limitations
