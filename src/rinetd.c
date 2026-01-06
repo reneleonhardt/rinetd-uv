@@ -51,7 +51,7 @@ int globalRulesCount = 0;
 ServerInfo *seInfo = NULL;
 int seTotal = 0;
 
-/* Connection management - now using dynamic allocation instead of pool */
+/* Connection management */
 static ConnectionInfo *connectionListHead = NULL;
 static int activeConnections = 0;
 
@@ -109,7 +109,7 @@ static ConnectionInfo *allocateConnection(void);
 static void cacheServerInfoForLogging(ConnectionInfo *cnx, ServerInfo const *srv);
 static int checkConnectionAllowed(ConnectionInfo const *cnx);
 
-static int readArgs (int argc, char **argv, RinetdOptions *options);
+static int readArgs(int argc, char **argv, RinetdOptions *options);
 static void clearConfiguration(void);
 static void readConfiguration(char const *file);
 
@@ -387,6 +387,7 @@ void addServer(char *bindAddress, char *bindPort, int bindProtocol,
     /* Allocate server info */
     seInfo = (ServerInfo *)realloc(seInfo, sizeof(ServerInfo) * (seTotal + 1));
     if (!seInfo) {
+        logError("realloc failed for ServerInfo");
         exit(1);
     }
     seInfo[seTotal] = si;
@@ -1470,10 +1471,14 @@ RETSIGTYPE hup(int s)
 RETSIGTYPE quit(int s)
 {
     (void)s;
+
     /* Obey the request, but first flush the log */
     if (logFile) {
         fclose(logFile);
     }
+
+    logInfo("forced quit\n");
+
     /* Clear configuration (connections will be freed when process exits) */
     clearConfiguration();
     exit(0);
@@ -1494,8 +1499,7 @@ void registerPID(char const *pid_file_name)
     }
     return;
 error:
-    logError("couldn't write to %s. PID was not logged (%m).\n",
-        pid_file_name);
+    logError("couldn't write to %s. PID was not logged (%m).\n", pid_file_name);
 #else
     /* add other systems with wherever they register processes */
     (void)pid_file_name;
@@ -1599,16 +1603,16 @@ static int readArgs (int argc, char **argv, RinetdOptions *options)
             {"version",    0, 0, 'v'},
             {0, 0, 0, 0}
         };
-        int c = getopt_long (argc, argv, "c:fshv",
-            long_options, &option_index);
-        if (c == -1) {
+
+        int c = getopt_long(argc, argv, "c:fhv", long_options, &option_index);
+        if (c == -1)
             break;
-        }
+
         switch (c) {
             case 'c':
                 options->conf_file = optarg;
                 if (!options->conf_file) {
-                    logError("Not enough memory to launch rinetd-uv.\n");
+                    logError("configuration filename not accepted\n");
                     exit(1);
                 }
                 break;
@@ -1640,7 +1644,6 @@ static int readArgs (int argc, char **argv, RinetdOptions *options)
 }
 
 /* get_gmtoff was borrowed from Apache. Thanks folks. */
-
 static struct tm *get_gmtoff(int *tz)
 {
     time_t tt = time(NULL);
@@ -1655,4 +1658,3 @@ static struct tm *get_gmtoff(int *tz)
     *tz = minutes;
     return t;
 }
-

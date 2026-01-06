@@ -27,11 +27,12 @@ This program efficiently redirects (proxy) TCP and UDP connections from one IP a
 
 ## Differences from Original rinetd
 
-While maintaining configuration file compatibility, rinetd-uv features:
+While maintaining general configuration file compatibility, rinetd-uv features:
 - Complete rewrite using libuv event loop (vs. select())
 - Configurable buffer sizes (1 KB to 1 MB)
-- Modern C99 codebase with improved error handling
 - Zero-copy forwarding for better performance
+
+For detailed discussion of incompatibilities check [DOCUMENTATION.md#incompatibilities](appriopriate section of DOCUMENTATION.md) or in the manual.
 
 Original rinetd: https://github.com/samhocevar/rinetd
 
