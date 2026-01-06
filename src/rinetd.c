@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 #else
-	openlog("rinetd", LOG_PID, LOG_DAEMON);
+	openlog("rinetd-uv", LOG_PID, LOG_DAEMON);
 #endif
 
 	readArgs(argc, argv, &options);
@@ -231,7 +231,7 @@ void logError(char const *fmt, ...)
 	else
 #endif
 	{
-		fprintf(stderr, "rinetd error: ");
+		fprintf(stderr, "rinetd-uv error: ");
 		vfprintf(stderr, fmt, ap);
 	}
 	va_end(ap);
@@ -247,7 +247,7 @@ void logInfo(char const *fmt, ...)
 	else
 #endif
 	{
-		fprintf(stderr, "rinetd: ");
+		fprintf(stderr, "rinetd-uv: ");
 		vfprintf(stderr, fmt, ap);
 	}
 	va_end(ap);
@@ -1533,7 +1533,7 @@ static int readArgs (int argc, char **argv, RinetdOptions *options)
 				options->foreground = 1;
 				break;
 			case 'h':
-				printf("Usage: rinetd [OPTION]\n"
+				printf("Usage: rinetd-uv [OPTION]\n"
 					"  -c, --conf-file FILE   read configuration "
 					"from FILE\n"
 					"  -f, --foreground       do not run in the "
@@ -1542,11 +1542,11 @@ static int readArgs (int argc, char **argv, RinetdOptions *options)
 					"  -v, --version          display version "
 					"number\n\n");
 				printf("Most options are controlled through the\n"
-					"configuration file. See the rinetd(8)\n"
+					"configuration file. See the rinetd-uv(8)\n"
 					"manpage for more information.\n");
 				exit (0);
 			case 'v':
-				printf ("rinetd %s\n", PACKAGE_VERSION);
+				printf ("rinetd-uv %s\n", PACKAGE_VERSION);
 				exit (0);
 			case '?':
 			default:

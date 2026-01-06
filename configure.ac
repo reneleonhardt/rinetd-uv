@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.52)
-AC_INIT(rinetd, 0.73, sam@hocevar.net)
+AC_INIT(rinetd-uv, 2.0, sam@hocevar.net)
 AC_CONFIG_AUX_DIR(.auto)
 AC_CONFIG_SRCDIR([src/rinetd.c])
 AC_CONFIG_HEADERS([src/config.h])

@@ -30,12 +30,12 @@ echo "Generating HTML from DOCUMENTATION.md..."
 # Generate HTML using pandoc
 # -s = standalone document (includes <html>, <head>, <body> tags)
 # -t html5 = output format is HTML5
-# --metadata title="rinetd - internet redirection server" = set page title
+# --metadata title="rinetd-uv - internet redirection server" = set page title
 # --toc = generate table of contents
 # --toc-depth=2 = include h1 and h2 in TOC
 # -c = add CSS file (optional, can be customized)
 pandoc -s -t html5 \
-    --metadata title="rinetd - internet redirection server" \
+    --metadata title="rinetd-uv - internet redirection server" \
     --metadata date="$(date +%Y-%m-%d)" \
     --toc --toc-depth=2 \
     --css=style.css \

@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="dcterms.date" content="2026-01-06" />
-  <title>rinetd - internet redirection server</title>
+  <title>rinetd-uv - internet redirection server</title>
   <style>
     code{white-space: pre-wrap;}
     span.smallcaps{font-variant: small-caps;}
@@ -92,18 +92,19 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">rinetd - internet redirection server</h1>
+<h1 class="title">rinetd-uv - internet redirection server</h1>
 <p class="date">2026-01-06</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#rinetd8---internet-redirection-server"
-id="toc-rinetd8---internet-redirection-server">rinetd(8) - internet
-redirection server</a>
+<li><a href="#rinetd-uv8---internet-redirection-server"
+id="toc-rinetd-uv8---internet-redirection-server">rinetd-uv(8) -
+internet redirection server</a>
 <ul>
 <li><a href="#name" id="toc-name">NAME</a></li>
 <li><a href="#synopsis" id="toc-synopsis">SYNOPSIS</a></li>
 <li><a href="#description" id="toc-description">DESCRIPTION</a></li>
+<li><a href="#run" id="toc-run">RUN</a></li>
 <li><a href="#options" id="toc-options">OPTIONS</a></li>
 <li><a href="#forwarding-rules" id="toc-forwarding-rules">FORWARDING
 RULES</a></li>
@@ -116,8 +117,8 @@ OPTIONS</a></li>
 AND DENY RULES</a></li>
 <li><a href="#example-configuration"
 id="toc-example-configuration">EXAMPLE CONFIGURATION</a></li>
-<li><a href="#reinitializing-rinetd"
-id="toc-reinitializing-rinetd">REINITIALIZING RINETD</a></li>
+<li><a href="#reinitializing-rinetd-uv"
+id="toc-reinitializing-rinetd-uv">REINITIALIZING RINETD-UV</a></li>
 <li><a href="#bugs-and-limitations" id="toc-bugs-and-limitations">BUGS
 AND LIMITATIONS</a></li>
 <li><a href="#performance-notes" id="toc-performance-notes">PERFORMANCE
@@ -126,39 +127,47 @@ NOTES</a></li>
 <li><a href="#contact-information" id="toc-contact-information">CONTACT
 INFORMATION</a></li>
 <li><a href="#thanks" id="toc-thanks">THANKS</a></li>
+<li><a href="#llm" id="toc-llm">LLM</a></li>
 <li><a href="#see-also" id="toc-see-also">SEE ALSO</a></li>
 </ul></li>
 </ul>
 </nav>
-<h1 id="rinetd8---internet-redirection-server">rinetd(8) - internet
-redirection server</h1>
+<h1 id="rinetd-uv8---internet-redirection-server">rinetd-uv(8) -
+internet redirection server</h1>
 <h2 id="name">NAME</h2>
-<p>rinetd - internet redirection server</p>
+<p>rinetd-uv - internet redirection server</p>
 <h2 id="synopsis">SYNOPSIS</h2>
-<pre><code>rinetd [-f] [-c configuration]
-rinetd -h
-rinetd -v</code></pre>
+<pre><code>rinetd-uv [-f] [-c configuration]
+rinetd-uv -h
+rinetd-uv -v</code></pre>
 <h2 id="description">DESCRIPTION</h2>
-<p><strong>rinetd</strong> redirects TCP or UDP connections from one IP
-address and port to another. <strong>rinetd</strong> is a single-process
-server which handles any number of connections to the address/port pairs
-specified in the file <code>/etc/rinetd.conf</code>. Since
-<strong>rinetd</strong> runs as a single process using nonblocking I/O
-(via libuv event loop), it is able to redirect a large number of
-connections without a severe impact on the machine. This makes it
-practical to run services on machines inside an IP masquerading
-firewall.</p>
-<p><strong>rinetd</strong> is typically launched at boot time, using the
-following syntax:</p>
-<pre><code>/usr/sbin/rinetd</code></pre>
+<p><strong>rinetd-uv</strong> redirects TCP or UDP connections from one
+IP address and port to another. <strong>rinetd-uv</strong> is a
+single-process server which handles any number of connections to the
+address/port pairs specified in the file
+<code>/etc/rinetd-uv.conf</code>. Since <strong>rinetd-uv</strong> runs
+as a single process using nonblocking I/O (via libuv event loop), it is
+able to redirect a large number of connections without a severe impact
+on the machine. This makes it practical to run services on machines
+inside an IP masquerading firewall.</p>
+<h3 id="libuv-version">LIBUV VERSION</h3>
+<p><strong>rinetd-uv</strong> is a modernized implementation of the
+original rinetd daemon, rewritten to use the libuv event loop library.
+While maintaining backward compatibility with the original rinetd
+configuration format, rinetd-uv features a completely rewritten internal
+architecture.</p>
+<h2 id="run">RUN</h2>
+<p><strong>rinetd-uv</strong> is typically launched at boot time, using
+the following syntax:</p>
+<pre><code>/usr/sbin/rinetd-uv</code></pre>
 <p>The configuration file is found in the file
-<code>/etc/rinetd.conf</code>, unless another file is specified using
+<code>/etc/rinetd-uv.conf</code>, unless another file is specified using
 the <code>-c</code> command line option.</p>
 <h2 id="options">OPTIONS</h2>
 <dl>
 <dt><strong>-f</strong></dt>
 <dd>
-Run <strong>rinetd</strong> in the foreground, without forking to the
+Run <strong>rinetd-uv</strong> in the foreground, without forking to the
 background.
 </dd>
 <dt><strong>-c</strong> <em>configuration</em></dt>
@@ -182,11 +191,11 @@ format of a forwarding rule is as follows:</p>
 <pre><code>206.125.69.81 80  10.1.1.2 80</code></pre>
 <p>Would redirect all connections to port 80 of the “real” IP address
 206.125.69.81, which could be a virtual interface, through
-<strong>rinetd</strong> to port 80 of the address 10.1.1.2, which would
-typically be a machine on the inside of a firewall which has no direct
-routing to the outside world.</p>
+<strong>rinetd-uv</strong> to port 80 of the address 10.1.1.2, which
+would typically be a machine on the inside of a firewall which has no
+direct routing to the outside world.</p>
 <p>Although responding on individual interfaces rather than on all
-interfaces is one of <strong>rinetd</strong>’s primary features,
+interfaces is one of <strong>rinetd-uv</strong>’s primary features,
 sometimes it is preferable to respond on all IP addresses that belong to
 the server. In this situation, the special IP address
 <code>0.0.0.0</code> can be used. For example:</p>
@@ -247,12 +256,13 @@ determines total memory usage. For example, with 1000 concurrent
 connections: - <code>buffersize 4096</code>: ~4 MB memory -
 <code>buffersize 65536</code>: ~64 MB memory</p>
 <h3 id="logging">Logging</h3>
-<p><strong>rinetd</strong> is able to produce a log file in either of
+<p><strong>rinetd-uv</strong> is able to produce a log file in either of
 two formats: tab-delimited and web server-style “common log format”.</p>
-<p>By default, <strong>rinetd</strong> does not produce a log file. To
-activate logging, add the following line to the configuration file:</p>
-<pre><code>logfile /var/log/rinetd.log</code></pre>
-<p>By default, <strong>rinetd</strong> logs in a simple tab-delimited
+<p>By default, <strong>rinetd-uv</strong> does not produce a log file.
+To activate logging, add the following line to the configuration
+file:</p>
+<pre><code>logfile /var/log/rinetd-uv.log</code></pre>
+<p>By default, <strong>rinetd-uv</strong> logs in a simple tab-delimited
 format containing the following information:</p>
 <ul>
 <li>Date and time</li>
@@ -270,9 +280,9 @@ following line to the configuration file:</p>
 <pre><code>logcommon</code></pre>
 <h3 id="pid-file">PID File</h3>
 <p>Under Linux the process ID is saved in the file
-<code>/var/run/rinetd.pid</code> by default. An alternate filename can
-be provided:</p>
-<pre><code>pidlogfile /var/run/myrinetd.pid</code></pre>
+<code>/var/run/rinetd-uv.pid</code> by default. An alternate filename
+can be provided:</p>
+<pre><code>pidlogfile /var/run/myrinetd-uv.pid</code></pre>
 <h2 id="allow-and-deny-rules">ALLOW AND DENY RULES</h2>
 <p>Configuration files can also contain allow and deny rules.</p>
 <p>Allow rules which appear <strong>before the first forwarding
@@ -313,12 +323,13 @@ domain.</p>
 <p><strong>Important:</strong> Host names are <strong>NOT</strong>
 permitted in allow and deny rules. The performance cost of looking up IP
 addresses to find their corresponding names is prohibitive. Since
-<strong>rinetd</strong> is a single process server, all other
+<strong>rinetd-uv</strong> is a single process server, all other
 connections would be forced to pause during the address lookup.</p>
 <h2 id="example-configuration">EXAMPLE CONFIGURATION</h2>
 <pre><code># Global settings
-logfile /var/log/rinetd.log
+logfile /var/log/rinetd-uv.log
 buffersize 32768
+pidfile /var/run/rinetd-uv.pid
 
 # Global access control
 allow 192.168.*
@@ -337,28 +348,38 @@ deny *
 # Per-rule access control
 0.0.0.0 22 192.168.1.20 22
 allow 10.0.0.*</code></pre>
-<h2 id="reinitializing-rinetd">REINITIALIZING RINETD</h2>
-<p>The <code>kill -1</code> signal (SIGHUP) can be used to cause
-<strong>rinetd</strong> to reload its configuration file without
-interrupting existing connections.</p>
+<h2 id="reinitializing-rinetd-uv">REINITIALIZING RINETD-UV</h2>
+<p>The SIGHUP signal can be used to cause <strong>rinetd-uv</strong> to
+reload its configuration file without interrupting existing
+connections.</p>
 <div class="sourceCode" id="cb16"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd.pid<span class="va">)</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd-uv.pid<span class="va">)</span></span></code></pre></div>
 <p>Or simply:</p>
 <div class="sourceCode" id="cb17"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
 <h2 id="bugs-and-limitations">BUGS AND LIMITATIONS</h2>
-<p><strong>rinetd</strong> only redirects protocols which use a single
-TCP or UDP socket. This rules out FTP (which uses multiple connections
-for data transfer).</p>
+<p><strong>rinetd-uv</strong> only redirects protocols which use a
+single TCP or UDP socket. This rules out FTP (which uses multiple
+connections for data transfer).</p>
 <p>The server redirected to is not able to identify the host the client
 really came from. This cannot be corrected; however, the log produced by
-<strong>rinetd</strong> provides a way to obtain this information.</p>
-<p>Mixed-mode forwarding (TCP client to UDP backend, or UDP client to
-TCP backend) is not supported due to fundamental protocol
-incompatibilities. See <code>TCP-UDP_MIXED_MODE.md</code> for technical
-details.</p>
+<strong>rinetd-uv</strong> provides a way to obtain this
+information.</p>
+<h3 id="incompatibilities">INCOMPATIBILITIES</h3>
+<p><strong>rinetd-uv</strong> was meant as drop-in replacement for
+<strong>rinetd</strong>, although there are some differences</p>
+<ul>
+<li>logging format and behavior changed slightly: date is in the iso
+format (yyyy-mm-dd hh:mm:ss), for every connection 2 lines are logged -
+one with ‘open’ result and one with ‘done-’ result (which contain valid
+values for transferred data sizes)</li>
+<li>original rinetd mentioned possibility to proxy traffic between
+differen protocols (UDP &lt;-&gt; TCP), in <strong>rinetd-uv</strong>
+it’s not possible due to fundamental protocol incompatibilities. See
+<code>TCP-UDP_MIXED_MODE.md</code> for technical details.</li>
+</ul>
 <h2 id="performance-notes">PERFORMANCE NOTES</h2>
-<p><strong>rinetd</strong> uses libuv for event-driven I/O, providing
+<p><strong>rinetd-uv</strong> uses libuv for event-driven I/O, providing
 excellent performance characteristics:</p>
 <ul>
 <li>Single-process, event-driven architecture</li>
@@ -376,13 +397,16 @@ connections and adjusting buffer size accordingly</p>
 <h2 id="license">LICENSE</h2>
 <p>Copyright (c) 1997, 1998, 1999, Thomas Boutell and Boutell.Com,
 Inc.</p>
-<p>Copyright (c) 2003-2021 Sam Hocevar</p>
+<p>Copyright (c) 2003-2025 Sam Hocevar</p>
+<p>Copyright (c) 2026 Marcin Gryszkalis</p>
 <p>This software is released for free use under the terms of the GNU
 General Public License, version 2 or higher. NO WARRANTY IS EXPRESSED OR
 IMPLIED. USE THIS SOFTWARE AT YOUR OWN RISK.</p>
 <h2 id="contact-information">CONTACT INFORMATION</h2>
-<p>See https://github.com/samhocevar/rinetd/releases for the latest
+<p>See https://github.com/marcin-gryszkalis/rinetd for the latest
 release.</p>
+<p><strong>Marcin Gryszkalis</strong> can be reached by email:
+mg@fork.pl</p>
 <p><strong>Thomas Boutell</strong> can be reached by email:
 boutell@boutell.com</p>
 <p><strong>Sam Hocevar</strong> can be reached by email:
@@ -391,12 +415,19 @@ sam@hocevar.net</p>
 <p>Thanks are due to Bill Davidsen, Libor Pechachek, Sascha Ziemann, the
 Apache Group, and many others who have contributed advice and/or source
 code to this and other free software projects.</p>
+<h2 id="llm">LLM</h2>
+<p>This implementation was created with support of assorted LLM agents
+(Claude Opus, Claude Sonnet, Gemini, GPT). The architecure and code was
+reviewed by human.</p>
 <h2 id="see-also">SEE ALSO</h2>
-<p>Additional documentation: - <code>BUILD.md</code> - Build
-requirements and instructions - <code>BUFFER_OPTIMIZATION.md</code> -
-Buffer management and optimization details -
-<code>TCP-UDP_MIXED_MODE.md</code> - Technical analysis of mixed-mode
-limitations - <code>CLEANUP_SUMMARY.md</code> - Code cleanup and
-maintenance notes</p>
+<h3 id="links">LINKS</h3>
+<p>rinetd-uv: https://github.com/marcin-gryszkalis/rinetd original
+rinetd: https://github.com/samhocevar/rinetd</p>
+<h3 id="additional-documentation">ADDITIONAL DOCUMENTATION</h3>
+<ul>
+<li><code>BUILD.md</code> - Build requirements and instructions</li>
+<li><code>TCP-UDP_MIXED_MODE.md</code> - Technical analysis of
+mixed-mode limitations</li>
+</ul>
 </body>
 </html>

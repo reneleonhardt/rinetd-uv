@@ -1,6 +1,6 @@
-# Building rinetd
+# Building rinetd-uv
 
-This document describes how to build and install rinetd from source.
+This document describes how to build and install rinetd-uv from source.
 
 ## Build Requirements
 
@@ -51,7 +51,7 @@ sudo pacman -S base-devel autoconf automake pkgconf libuv
 
 ### Quick Build
 
-For most users, the following commands will build and install rinetd:
+For most users, the following commands will build and install rinetd-uv:
 
 ```bash
 ./bootstrap
@@ -105,13 +105,13 @@ Run the configure script to detect system capabilities and create Makefiles:
 
 #### 3. Build
 
-Compile rinetd:
+Compile rinetd-uv:
 
 ```bash
 make
 ```
 
-The compiled binary will be in `src/rinetd`.
+The compiled binary will be in `src/rinetd-uv`.
 
 **Parallel build** (faster on multi-core systems):
 
@@ -121,16 +121,16 @@ make -j$(nproc)
 
 #### 4. Install
 
-Install rinetd system-wide (requires root privileges):
+Install rinetd-uv system-wide (requires root privileges):
 
 ```bash
 sudo make install
 ```
 
 This installs:
-- `/usr/local/sbin/rinetd` - Main executable
-- `/usr/local/share/man/man8/rinetd.8` - Man page
-- `/usr/local/etc/rinetd.conf` - Example configuration file
+- `/usr/local/sbin/rinetd-uv` - Main executable
+- `/usr/local/share/man/man8/rinetd-uv.8` - Man page
+- `/usr/local/etc/rinetd-uv.conf` - Example configuration file
 
 ## Development Build
 
@@ -171,7 +171,7 @@ make
 
 ## Testing
 
-rinetd includes test scripts in the `test/` directory.
+rinetd-uv includes test scripts in the `test/` directory.
 
 ### Running Tests
 
@@ -197,10 +197,10 @@ cd test
 0.0.0.0 8080 127.0.0.1 80
 ```
 
-2. Run rinetd in foreground mode:
+2. Run rinetd-uv in foreground mode:
 
 ```bash
-./src/rinetd -f -c test.conf
+./src/rinetd-uv -f -c test.conf
 ```
 
 3. Test the forwarding:
@@ -290,7 +290,7 @@ sudo dnf install autoconf automake
 
 ## Uninstalling
 
-To remove rinetd from your system:
+To remove rinetd-uv from your system:
 
 ```bash
 sudo make uninstall
@@ -304,7 +304,7 @@ sudo make uninstall
 make dist
 ```
 
-This creates `rinetd-0.73.tar.gz` and `rinetd-0.73.tar.bz2`.
+This creates `rinetd-uv-2.0.tar.gz` and `rinetd-uv-2.0.tar.bz2`.
 
 ### Distribution Check
 
@@ -318,7 +318,7 @@ This unpacks the tarball, builds it in a separate directory, runs tests, and ver
 
 ## Cross-Compilation
 
-rinetd supports cross-compilation using autotools:
+rinetd-uv supports cross-compilation using autotools:
 
 ### Example: Cross-Compiling for ARM
 
@@ -349,14 +349,14 @@ Install dependencies via Homebrew. The build process is identical to Linux.
 
 ### Windows
 
-rinetd can be built on Windows using:
+rinetd-uv can be built on Windows using:
 - **MinGW/MSYS2**: Recommended, follows Unix build process
 - **Visual Studio**: Use `rinetd.vcxproj` project file (included)
 - **WSL**: Build as if on Linux
 
 ### BSD Systems
 
-FreeBSD and OpenBSD support rinetd. Install dependencies via pkg/ports:
+FreeBSD and OpenBSD support rinetd-uv. Install dependencies via pkg/ports:
 
 ```bash
 # FreeBSD
@@ -370,13 +370,13 @@ pkg_add autoconf automake libuv
 
 ### Buffer Size Configuration
 
-rinetd's memory usage depends on buffer size and concurrent connections:
+rinetd-uv's memory usage depends on buffer size and concurrent connections:
 
 ```
 Total Memory ≈ bufferSize × concurrent_connections
 ```
 
-You can configure buffer size in `rinetd.conf`:
+You can configure buffer size in `rinetd-uv.conf`:
 
 ```
 buffersize 32768  # 32 KB per connection
@@ -387,7 +387,7 @@ See `BUFFER_OPTIMIZATION.md` for detailed tuning recommendations.
 ## Further Information
 
 - **Documentation**: See `DOCUMENTATION.md` for complete usage documentation
-- **Man Page**: `man rinetd` (after installation)
+- **Man Page**: `man rinetd-uv` (after installation)
 - **Performance**: See `BUFFER_OPTIMIZATION.md` for optimization tips
 - **Changes**: See `CHANGES.md` for version history
-- **Issues**: https://github.com/samhocevar/rinetd/issues
+- **Original rinetd**: https://github.com/samhocevar/rinetd

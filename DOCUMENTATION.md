@@ -1,33 +1,39 @@
-# rinetd(8) - internet redirection server
+# rinetd-uv(8) - internet redirection server
 
 ## NAME
 
-rinetd - internet redirection server
+rinetd-uv - internet redirection server
 
 ## SYNOPSIS
 
 ```
-rinetd [-f] [-c configuration]
-rinetd -h
-rinetd -v
+rinetd-uv [-f] [-c configuration]
+rinetd-uv -h
+rinetd-uv -v
 ```
 
 ## DESCRIPTION
 
-**rinetd** redirects TCP or UDP connections from one IP address and port to another. **rinetd** is a single-process server which handles any number of connections to the address/port pairs specified in the file `/etc/rinetd.conf`. Since **rinetd** runs as a single process using nonblocking I/O (via libuv event loop), it is able to redirect a large number of connections without a severe impact on the machine. This makes it practical to run services on machines inside an IP masquerading firewall.
+**rinetd-uv** redirects TCP or UDP connections from one IP address and port to another. **rinetd-uv** is a single-process server which handles any number of connections to the address/port pairs specified in the file `/etc/rinetd-uv.conf`. Since **rinetd-uv** runs as a single process using nonblocking I/O (via libuv event loop), it is able to redirect a large number of connections without a severe impact on the machine. This makes it practical to run services on machines inside an IP masquerading firewall.
 
-**rinetd** is typically launched at boot time, using the following syntax:
+### LIBUV VERSION
+
+**rinetd-uv** is a modernized implementation of the original rinetd daemon, rewritten to use the libuv event loop library. While maintaining backward compatibility with the original rinetd configuration format, rinetd-uv features a completely rewritten internal architecture.
+
+## RUN
+
+**rinetd-uv** is typically launched at boot time, using the following syntax:
 
 ```
-/usr/sbin/rinetd
+/usr/sbin/rinetd-uv
 ```
 
-The configuration file is found in the file `/etc/rinetd.conf`, unless another file is specified using the `-c` command line option.
+The configuration file is found in the file `/etc/rinetd-uv.conf`, unless another file is specified using the `-c` command line option.
 
 ## OPTIONS
 
 **-f**
-:   Run **rinetd** in the foreground, without forking to the background.
+:   Run **rinetd-uv** in the foreground, without forking to the background.
 
 **-c** *configuration*
 :   Specify an alternate configuration file.
@@ -52,9 +58,9 @@ For example:
 206.125.69.81 80  10.1.1.2 80
 ```
 
-Would redirect all connections to port 80 of the "real" IP address 206.125.69.81, which could be a virtual interface, through **rinetd** to port 80 of the address 10.1.1.2, which would typically be a machine on the inside of a firewall which has no direct routing to the outside world.
+Would redirect all connections to port 80 of the "real" IP address 206.125.69.81, which could be a virtual interface, through **rinetd-uv** to port 80 of the address 10.1.1.2, which would typically be a machine on the inside of a firewall which has no direct routing to the outside world.
 
-Although responding on individual interfaces rather than on all interfaces is one of **rinetd**'s primary features, sometimes it is preferable to respond on all IP addresses that belong to the server. In this situation, the special IP address `0.0.0.0` can be used. For example:
+Although responding on individual interfaces rather than on all interfaces is one of **rinetd-uv**'s primary features, sometimes it is preferable to respond on all IP addresses that belong to the server. In this situation, the special IP address `0.0.0.0` can be used. For example:
 
 ```
 0.0.0.0 23  10.1.1.2 23
@@ -126,17 +132,18 @@ The buffer size multiplied by the number of concurrent connections determines to
 - `buffersize 4096`: ~4 MB memory
 - `buffersize 65536`: ~64 MB memory
 
+
 ### Logging
 
-**rinetd** is able to produce a log file in either of two formats: tab-delimited and web server-style "common log format".
+**rinetd-uv** is able to produce a log file in either of two formats: tab-delimited and web server-style "common log format".
 
-By default, **rinetd** does not produce a log file. To activate logging, add the following line to the configuration file:
+By default, **rinetd-uv** does not produce a log file. To activate logging, add the following line to the configuration file:
 
 ```
-logfile /var/log/rinetd.log
+logfile /var/log/rinetd-uv.log
 ```
 
-By default, **rinetd** logs in a simple tab-delimited format containing the following information:
+By default, **rinetd-uv** logs in a simple tab-delimited format containing the following information:
 
 - Date and time
 - Client address
@@ -156,10 +163,10 @@ logcommon
 
 ### PID File
 
-Under Linux the process ID is saved in the file `/var/run/rinetd.pid` by default. An alternate filename can be provided:
+Under Linux the process ID is saved in the file `/var/run/rinetd-uv.pid` by default. An alternate filename can be provided:
 
 ```
-pidlogfile /var/run/myrinetd.pid
+pidlogfile /var/run/myrinetd-uv.pid
 ```
 
 ## ALLOW AND DENY RULES
@@ -193,14 +200,15 @@ allow 206.125.69.*
 
 This allow rule matches all IP addresses in the 206.125.69 class C domain.
 
-**Important:** Host names are **NOT** permitted in allow and deny rules. The performance cost of looking up IP addresses to find their corresponding names is prohibitive. Since **rinetd** is a single process server, all other connections would be forced to pause during the address lookup.
+**Important:** Host names are **NOT** permitted in allow and deny rules. The performance cost of looking up IP addresses to find their corresponding names is prohibitive. Since **rinetd-uv** is a single process server, all other connections would be forced to pause during the address lookup.
 
 ## EXAMPLE CONFIGURATION
 
 ```
 # Global settings
-logfile /var/log/rinetd.log
+logfile /var/log/rinetd-uv.log
 buffersize 32768
+pidfile /var/run/rinetd-uv.pid
 
 # Global access control
 allow 192.168.*
@@ -221,31 +229,37 @@ deny *
 allow 10.0.0.*
 ```
 
-## REINITIALIZING RINETD
+## REINITIALIZING RINETD-UV
 
-The `kill -1` signal (SIGHUP) can be used to cause **rinetd** to reload its configuration file without interrupting existing connections.
+The SIGHUP signal can be used to cause **rinetd-uv** to reload its configuration file without interrupting existing connections.
 
 ```bash
-kill -HUP $(cat /var/run/rinetd.pid)
+kill -HUP $(cat /var/run/rinetd-uv.pid)
 ```
 
 Or simply:
 
 ```bash
-killall -HUP rinetd
+killall -HUP rinetd-uv
 ```
 
 ## BUGS AND LIMITATIONS
 
-**rinetd** only redirects protocols which use a single TCP or UDP socket. This rules out FTP (which uses multiple connections for data transfer).
+**rinetd-uv** only redirects protocols which use a single TCP or UDP socket. This rules out FTP (which uses multiple connections for data transfer).
 
-The server redirected to is not able to identify the host the client really came from. This cannot be corrected; however, the log produced by **rinetd** provides a way to obtain this information.
+The server redirected to is not able to identify the host the client really came from. This cannot be corrected; however, the log produced by **rinetd-uv** provides a way to obtain this information.
 
-Mixed-mode forwarding (TCP client to UDP backend, or UDP client to TCP backend) is not supported due to fundamental protocol incompatibilities. See `TCP-UDP_MIXED_MODE.md` for technical details.
+
+### INCOMPATIBILITIES
+
+**rinetd-uv** was meant as drop-in replacement for **rinetd**, although there are some differences
+
+- logging format and behavior changed slightly: date is in the iso format (yyyy-mm-dd hh:mm:ss), for every connection 2 lines are logged - one with 'open' result and one with 'done-' result (which contain valid values for transferred data sizes)
+- original rinetd mentioned possibility to proxy traffic between differen protocols (UDP <-> TCP), in **rinetd-uv** it's not possible due to fundamental protocol incompatibilities. See `TCP-UDP_MIXED_MODE.md` for technical details.
 
 ## PERFORMANCE NOTES
 
-**rinetd** uses libuv for event-driven I/O, providing excellent performance characteristics:
+**rinetd-uv** uses libuv for event-driven I/O, providing excellent performance characteristics:
 
 - Single-process, event-driven architecture
 - Dynamic buffer allocation with zero-copy forwarding
@@ -266,13 +280,17 @@ For high-performance deployments, consider:
 
 Copyright (c) 1997, 1998, 1999, Thomas Boutell and Boutell.Com, Inc.
 
-Copyright (c) 2003-2021 Sam Hocevar
+Copyright (c) 2003-2025 Sam Hocevar
+
+Copyright (c) 2026 Marcin Gryszkalis
 
 This software is released for free use under the terms of the GNU General Public License, version 2 or higher. NO WARRANTY IS EXPRESSED OR IMPLIED. USE THIS SOFTWARE AT YOUR OWN RISK.
 
 ## CONTACT INFORMATION
 
-See https://github.com/samhocevar/rinetd/releases for the latest release.
+See https://github.com/marcin-gryszkalis/rinetd for the latest release.
+
+**Marcin Gryszkalis** can be reached by email: mg@fork.pl
 
 **Thomas Boutell** can be reached by email: boutell@boutell.com
 
@@ -282,10 +300,18 @@ See https://github.com/samhocevar/rinetd/releases for the latest release.
 
 Thanks are due to Bill Davidsen, Libor Pechachek, Sascha Ziemann, the Apache Group, and many others who have contributed advice and/or source code to this and other free software projects.
 
+## LLM
+
+This implementation was created with support of assorted LLM agents (Claude Opus, Claude Sonnet, Gemini, GPT). The architecure and code was reviewed by human.
+
 ## SEE ALSO
 
-Additional documentation:
+### LINKS
+
+rinetd-uv: https://github.com/marcin-gryszkalis/rinetd
+original rinetd: https://github.com/samhocevar/rinetd
+
+### ADDITIONAL DOCUMENTATION
+
 - `BUILD.md` - Build requirements and instructions
-- `BUFFER_OPTIMIZATION.md` - Buffer management and optimization details
 - `TCP-UDP_MIXED_MODE.md` - Technical analysis of mixed-mode limitations
-- `CLEANUP_SUMMARY.md` - Code cleanup and maintenance notes

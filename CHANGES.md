@@ -1,3 +1,18 @@
+## Version 2.0 (2026/01/06)
+
+**Major rewrite as rinetd-uv**
+
+ * Complete rewrite using libuv event loop (replacing select()-based I/O)
+ * Renamed to rinetd-uv to distinguish from original implementation
+ * Configurable buffer sizes (1 KB to 1 MB, default 64 KB)
+ * Zero-copy buffer forwarding for improved performance
+ * Removed malloc+memcpy overhead in UDP receive paths
+ * Comprehensive code cleanup: removed unused functions and legacy code
+ * Fixed SIGPIPE handling via libuv
+ * Updated documentation: single-source markdown with auto-generated man page and HTML
+ * Backward compatible with original rinetd configuration files
+ * Modern C99 codebase with improved error handling
+
 ## Version 0.73 (2021/02/19)
 
  * improve error reporting

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Generate rinetd.8 man page from DOCUMENTATION.md
+# Generate rinetd-uv.8 man page from DOCUMENTATION.md
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE="$SCRIPT_DIR/DOCUMENTATION.md"
-OUTPUT="$SCRIPT_DIR/rinetd.8"
+OUTPUT="$SCRIPT_DIR/rinetd-uv.8"
 
 # Check if pandoc is available
 if ! command -v pandoc >/dev/null 2>&1; then
@@ -30,14 +30,14 @@ echo "Generating man page from DOCUMENTATION.md..."
 # Generate man page using pandoc
 # -s = standalone document
 # -t man = output format is man page
-# --metadata title="rinetd" = set title
+# --metadata title="rinetd-uv" = set title
 # --metadata section="8" = man section 8 (system administration)
 # --metadata date="$(date +%Y-%m-%d)" = set current date
 pandoc -s -t man \
-    --metadata title="rinetd" \
+    --metadata title="rinetd-uv" \
     --metadata section="8" \
     --metadata date="$(date +%Y-%m-%d)" \
-    --metadata footer="rinetd 0.73" \
+    --metadata footer="rinetd-uv 2.0" \
     "$SOURCE" -o "$OUTPUT"
 
 echo "Man page generated: $OUTPUT"

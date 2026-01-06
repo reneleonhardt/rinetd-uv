@@ -8,17 +8,17 @@ EXTRA_DIST = bootstrap COPYING CHANGES.md README.md DOCUMENTATION.md BUILD.md \
 	index.html rinetd.vcxproj generate-manpage.sh generate-html.sh \
 	$(man_MANS) $(sysconf_DATA)
 
-man_MANS = rinetd.8
-sysconf_DATA = rinetd.conf
+man_MANS = rinetd-uv.8
+sysconf_DATA = rinetd-uv.conf
 noinst_DATA = index.html
 
 # Generate man page from DOCUMENTATION.md using pandoc (if available)
-rinetd.8: DOCUMENTATION.md
+rinetd-uv.8: DOCUMENTATION.md
 	@if which pandoc >/dev/null 2>&1; then \
 		echo "Generating man page from DOCUMENTATION.md..."; \
 		./generate-manpage.sh; \
 	else \
-		echo "Warning: pandoc not found, keeping existing rinetd.8"; \
+		echo "Warning: pandoc not found, keeping existing rinetd-uv.8"; \
 		touch $@; \
 	fi
 
@@ -28,9 +28,9 @@ index.html: DOCUMENTATION.md
 	@if which pandoc >/dev/null 2>&1; then \
 		echo "Generating HTML from DOCUMENTATION.md..."; \
 		./generate-html.sh; \
-	elif [ -f rinetd.8 ] && which roffit >/dev/null 2>&1; then \
-		echo "Using roffit to generate HTML from rinetd.8..."; \
-		roffit < rinetd.8 > $@; \
+	elif [ -f rinetd-uv.8 ] && which roffit >/dev/null 2>&1; then \
+		echo "Using roffit to generate HTML from rinetd-uv.8..."; \
+		roffit < rinetd-uv.8 > $@; \
 	else \
 		echo "Warning: neither pandoc nor roffit found, keeping existing index.html"; \
 		touch $@; \
@@ -41,7 +41,7 @@ index.html: DOCUMENTATION.md
 
 docs: docs-man docs-html
 
-docs-man: rinetd.8
+docs-man: rinetd-uv.8
 
 docs-html: index.html
 

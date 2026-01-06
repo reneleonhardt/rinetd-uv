@@ -1,8 +1,8 @@
 
 EXTRA_DIST = parse.peg getopt.c getopt.h
 
-sbin_PROGRAMS = ../rinetd
-___rinetd_SOURCES = rinetd.c rinetd.h \
+sbin_PROGRAMS = rinetd-uv
+rinetd_uv_SOURCES = rinetd.c rinetd.h \
                     parse.c parse.h \
                     match.c match.h \
                     net.c net.h \
@@ -19,10 +19,10 @@ parse.c: parse.peg
 # _XOPEN_SOURCE is for struct sigaction
 # _GNU_SOURCE is for h_errno and gethostbyname-related macros
 # _BSD_SOURCE, __BSD_VISIBLE and _DEFAULT_SOURCE are for daemon() and vsyslog() on BSD systems
-___rinetd_CFLAGS = -std=c99 -D_POSIX_C_SOURCE=200809L \
+rinetd_uv_CFLAGS = -std=c99 -D_POSIX_C_SOURCE=200809L \
                    -D_XOPEN_SOURCE -D_GNU_SOURCE -D_DARWIN_C_SOURCE \
                    -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__BSD_VISIBLE \
                    -Wall -Wextra -Wwrite-strings $(LIBUV_CFLAGS)
 
-___rinetd_LDADD = $(LIBUV_LIBS)
+rinetd_uv_LDADD = $(LIBUV_LIBS)
 
