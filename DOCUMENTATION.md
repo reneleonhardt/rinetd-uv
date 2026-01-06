@@ -166,7 +166,7 @@ logcommon
 Under Linux the process ID is saved in the file `/var/run/rinetd-uv.pid` by default. An alternate filename can be provided:
 
 ```
-pidlogfile /var/run/myrinetd-uv.pid
+pidfile /var/run/myrinetd-uv.pid
 ```
 
 ## ALLOW AND DENY RULES
@@ -255,6 +255,7 @@ The server redirected to is not able to identify the host the client really came
 **rinetd-uv** was meant as drop-in replacement for **rinetd**, although there are some differences
 
 - logging format and behavior changed slightly: date is in the iso format (yyyy-mm-dd hh:mm:ss), for every connection 2 lines are logged - one with 'open' result and one with 'done-' result (which contain valid values for transferred data sizes)
+- `pidlogfile` option was renamed to `pidfile`
 - original rinetd mentioned possibility to proxy traffic between differen protocols (UDP <-> TCP), in **rinetd-uv** it's not possible due to fundamental protocol incompatibilities. See `TCP-UDP_MIXED_MODE.md` for technical details.
 
 ## PERFORMANCE NOTES
@@ -292,9 +293,9 @@ See https://github.com/marcin-gryszkalis/rinetd for the latest release.
 
 **Marcin Gryszkalis** can be reached by email: mg@fork.pl
 
-**Thomas Boutell** can be reached by email: boutell@boutell.com
-
 **Sam Hocevar** can be reached by email: sam@hocevar.net
+
+**Thomas Boutell** can be reached by email: boutell@boutell.com
 
 ## THANKS
 
@@ -308,8 +309,8 @@ This implementation was created with support of assorted LLM agents (Claude Opus
 
 ### LINKS
 
-rinetd-uv: https://github.com/marcin-gryszkalis/rinetd
-original rinetd: https://github.com/samhocevar/rinetd
+- rinetd-uv: https://github.com/marcin-gryszkalis/rinetd
+- original rinetd: https://github.com/samhocevar/rinetd
 
 ### ADDITIONAL DOCUMENTATION
 

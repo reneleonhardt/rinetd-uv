@@ -282,7 +282,7 @@ following line to the configuration file:</p>
 <p>Under Linux the process ID is saved in the file
 <code>/var/run/rinetd-uv.pid</code> by default. An alternate filename
 can be provided:</p>
-<pre><code>pidlogfile /var/run/myrinetd-uv.pid</code></pre>
+<pre><code>pidfile /var/run/myrinetd-uv.pid</code></pre>
 <h2 id="allow-and-deny-rules">ALLOW AND DENY RULES</h2>
 <p>Configuration files can also contain allow and deny rules.</p>
 <p>Allow rules which appear <strong>before the first forwarding
@@ -373,6 +373,8 @@ information.</p>
 format (yyyy-mm-dd hh:mm:ss), for every connection 2 lines are logged -
 one with ‘open’ result and one with ‘done-’ result (which contain valid
 values for transferred data sizes)</li>
+<li><code>pidlogfile</code> option was renamed to
+<code>pidfile</code></li>
 <li>original rinetd mentioned possibility to proxy traffic between
 differen protocols (UDP &lt;-&gt; TCP), in <strong>rinetd-uv</strong>
 it’s not possible due to fundamental protocol incompatibilities. See
@@ -407,10 +409,10 @@ IMPLIED. USE THIS SOFTWARE AT YOUR OWN RISK.</p>
 release.</p>
 <p><strong>Marcin Gryszkalis</strong> can be reached by email:
 mg@fork.pl</p>
-<p><strong>Thomas Boutell</strong> can be reached by email:
-boutell@boutell.com</p>
 <p><strong>Sam Hocevar</strong> can be reached by email:
 sam@hocevar.net</p>
+<p><strong>Thomas Boutell</strong> can be reached by email:
+boutell@boutell.com</p>
 <h2 id="thanks">THANKS</h2>
 <p>Thanks are due to Bill Davidsen, Libor Pechachek, Sascha Ziemann, the
 Apache Group, and many others who have contributed advice and/or source
@@ -421,8 +423,10 @@ code to this and other free software projects.</p>
 reviewed by human.</p>
 <h2 id="see-also">SEE ALSO</h2>
 <h3 id="links">LINKS</h3>
-<p>rinetd-uv: https://github.com/marcin-gryszkalis/rinetd original
-rinetd: https://github.com/samhocevar/rinetd</p>
+<ul>
+<li>rinetd-uv: https://github.com/marcin-gryszkalis/rinetd</li>
+<li>original rinetd: https://github.com/samhocevar/rinetd</li>
+</ul>
 <h3 id="additional-documentation">ADDITIONAL DOCUMENTATION</h3>
 <ul>
 <li><code>BUILD.md</code> - Build requirements and instructions</li>

@@ -48,7 +48,7 @@
 
 file     =  (sol (line eol | invalid-syntax))*
 line     =  -? (command -?)? comment?
-command  =  (server-rule | auth-rule | logfile | pidlogfile | logcommon | buffersize)
+command  =  (server-rule | auth-rule | logfile | pidfile | logcommon | buffersize)
 comment  =  "#" (!eol .)*
 
 server-rule  =  bind-address - bind-port - connect-address - connect-port (-? server-options)?
@@ -118,7 +118,7 @@ logfile  =  "logfile" - < filename >
 	}
 }
 
-pidlogfile  =  "pidlogfile" - < filename >
+pidfile  =  "pidfile" - < filename >
 {
 	pidLogFileName = strdup(yytext);
 	if (!pidLogFileName) {

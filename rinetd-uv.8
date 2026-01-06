@@ -203,7 +203,7 @@ Under Linux the process ID is saved in the file
 An alternate filename can be provided:
 .IP
 .EX
-pidlogfile /var/run/myrinetd\-uv.pid
+pidfile /var/run/myrinetd\-uv.pid
 .EE
 .SS ALLOW AND DENY RULES
 Configuration files can also contain allow and deny rules.
@@ -319,6 +319,8 @@ logging format and behavior changed slightly: date is in the iso format
 with `open' result and one with `done\-' result (which contain valid
 values for transferred data sizes)
 .IP \[bu] 2
+\f[CR]pidlogfile\f[R] option was renamed to \f[CR]pidfile\f[R]
+.IP \[bu] 2
 original rinetd mentioned possibility to proxy traffic between differen
 protocols (UDP <\-> TCP), in \f[B]rinetd\-uv\f[R] it\[cq]s not possible
 due to fundamental protocol incompatibilities.
@@ -362,10 +364,10 @@ See https://github.com/marcin\-gryszkalis/rinetd for the latest release.
 .PP
 \f[B]Marcin Gryszkalis\f[R] can be reached by email: mg\[at]fork.pl
 .PP
+\f[B]Sam Hocevar\f[R] can be reached by email: sam\[at]hocevar.net
+.PP
 \f[B]Thomas Boutell\f[R] can be reached by email:
 boutell\[at]boutell.com
-.PP
-\f[B]Sam Hocevar\f[R] can be reached by email: sam\[at]hocevar.net
 .SS THANKS
 Thanks are due to Bill Davidsen, Libor Pechachek, Sascha Ziemann, the
 Apache Group, and many others who have contributed advice and/or source
@@ -376,8 +378,10 @@ This implementation was created with support of assorted LLM agents
 The architecure and code was reviewed by human.
 .SS SEE ALSO
 .SS LINKS
-rinetd\-uv: https://github.com/marcin\-gryszkalis/rinetd original
-rinetd: https://github.com/samhocevar/rinetd
+.IP \[bu] 2
+rinetd\-uv: https://github.com/marcin\-gryszkalis/rinetd
+.IP \[bu] 2
+original rinetd: https://github.com/samhocevar/rinetd
 .SS ADDITIONAL DOCUMENTATION
 .IP \[bu] 2
 \f[CR]BUILD.md\f[R] \- Build requirements and instructions

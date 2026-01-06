@@ -345,7 +345,7 @@ YY_RULE(int) yy_bind_port(yycontext *yy); /* 16 */
 YY_RULE(int) yy_bind_address(yycontext *yy); /* 15 */
 YY_RULE(int) yy_buffersize(yycontext *yy); /* 14 */
 YY_RULE(int) yy_logcommon(yycontext *yy); /* 13 */
-YY_RULE(int) yy_pidlogfile(yycontext *yy); /* 12 */
+YY_RULE(int) yy_pidfile(yycontext *yy); /* 12 */
 YY_RULE(int) yy_logfile(yycontext *yy); /* 11 */
 YY_RULE(int) yy_auth_rule(yycontext *yy); /* 10 */
 YY_RULE(int) yy_server_rule(yycontext *yy); /* 9 */
@@ -427,12 +427,12 @@ YY_ACTION(void) yy_1_logcommon(yycontext *yy, char *yytext, int yyleng)
 #undef yypos
 #undef yy
 }
-YY_ACTION(void) yy_1_pidlogfile(yycontext *yy, char *yytext, int yyleng)
+YY_ACTION(void) yy_1_pidfile(yycontext *yy, char *yytext, int yyleng)
 {
 #define __ yy->__
 #define yypos yy->__pos
 #define yythunkpos yy->__thunkpos
-  yyprintf((stderr, "do yy_1_pidlogfile\n"));
+  yyprintf((stderr, "do yy_1_pidfile\n"));
   {
 #line 122
   
@@ -1179,9 +1179,9 @@ YY_RULE(int) yy_logcommon(yycontext *yy)
   yyprintf((stderr, "  fail %s @ %s\n", "logcommon", yy->__buf+yy->__pos));
   return 0;
 }
-YY_RULE(int) yy_pidlogfile(yycontext *yy)
+YY_RULE(int) yy_pidfile(yycontext *yy)
 {  int yypos0= yy->__pos, yythunkpos0= yy->__thunkpos;
-  yyprintf((stderr, "%s\n", "pidlogfile"));  if (!yymatchString(yy, "pidlogfile")) goto l109;  if (!yy__(yy)) goto l109;  yyText(yy, yy->__begin, yy->__end);  {
+  yyprintf((stderr, "%s\n", "pidfile"));  if (!yymatchString(yy, "pidfile")) goto l109;  if (!yy__(yy)) goto l109;  yyText(yy, yy->__begin, yy->__end);  {
 #define yytext yy->__text
 #define yyleng yy->__textlen
 if (!(YY_BEGIN)) goto l109;
@@ -1193,11 +1193,11 @@ if (!(YY_BEGIN)) goto l109;
 if (!(YY_END)) goto l109;
 #undef yytext
 #undef yyleng
-  }  yyDo(yy, yy_1_pidlogfile, yy->__begin, yy->__end);
-  yyprintf((stderr, "  ok   %s @ %s\n", "pidlogfile", yy->__buf+yy->__pos));
+  }  yyDo(yy, yy_1_pidfile, yy->__begin, yy->__end);
+  yyprintf((stderr, "  ok   %s @ %s\n", "pidfile", yy->__buf+yy->__pos));
   return 1;
   l109:;	  yy->__pos= yypos0; yy->__thunkpos= yythunkpos0;
-  yyprintf((stderr, "  fail %s @ %s\n", "pidlogfile", yy->__buf+yy->__pos));
+  yyprintf((stderr, "  fail %s @ %s\n", "pidfile", yy->__buf+yy->__pos));
   return 0;
 }
 YY_RULE(int) yy_logfile(yycontext *yy)
@@ -1281,7 +1281,7 @@ YY_RULE(int) yy_command(yycontext *yy)
   {  int yypos122= yy->__pos, yythunkpos122= yy->__thunkpos;  if (!yy_server_rule(yy)) goto l123;  goto l122;
   l123:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_auth_rule(yy)) goto l124;  goto l122;
   l124:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_logfile(yy)) goto l125;  goto l122;
-  l125:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_pidlogfile(yy)) goto l126;  goto l122;
+  l125:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_pidfile(yy)) goto l126;  goto l122;
   l126:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_logcommon(yy)) goto l127;  goto l122;
   l127:;	  yy->__pos= yypos122; yy->__thunkpos= yythunkpos122;  if (!yy_buffersize(yy)) goto l121;
   }

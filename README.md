@@ -8,7 +8,7 @@ Released under the terms of the GNU General Public License, version 2 or later.
 
 ## About
 
-This program efficiently redirects TCP and UDP connections from one IP address/port combination to another. It is useful when operating virtual servers, firewalls, and similar network infrastructure.
+This program efficiently redirects (proxy) TCP and UDP connections from one IP address/port combination to another. It is useful when operating virtual servers, firewalls, and similar network infrastructure.
 
 **Key Features:**
 - Event-driven I/O using libuv (high performance, low overhead)
@@ -18,20 +18,11 @@ This program efficiently redirects TCP and UDP connections from one IP address/p
 - IPv4 and IPv6 support
 - Allow/deny rules for access control
 
-## Quick Start
-
-To build under Unix, run `./bootstrap` to create the configuration
-files, then `./configure` to create the build files, and then type
-`make` to build rinetd-uv. To install, type `make install` as root.
-
-For documentation run `make install`, then type `man rinetd-uv` for
-details. Or, read `index.html` in your browser, or `DOCUMENTATION.md`.
-
 ## Documentation
 
 - **DOCUMENTATION.md** - Complete user documentation
 - **BUILD.md** - Build requirements and instructions
-- **BUFFER_OPTIMIZATION.md** - Performance tuning guide
+- **CHANGES.md** - Changelog
 - **Man page**: `man rinetd-uv` (after installation)
 
 ## Differences from Original rinetd
