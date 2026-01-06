@@ -10,77 +10,77 @@
 #pragma once
 
 #if _WIN32
-	/* Define this to a reasonably large value */
-#	include <winsock2.h>
-#	include <ws2ipdef.h>
-#	include <ws2tcpip.h>
-#	include <windows.h>
+    /* Define this to a reasonably large value */
+#   include <winsock2.h>
+#   include <ws2ipdef.h>
+#   include <ws2tcpip.h>
+#   include <windows.h>
 #else
-#	include <sys/types.h>
-#	include <sys/socket.h>
-#	include <sys/ioctl.h>
-#	include <netdb.h>
-#	include <netinet/in.h>
-#	include <arpa/inet.h>
+#   include <sys/types.h>
+#   include <sys/socket.h>
+#   include <sys/ioctl.h>
+#   include <netdb.h>
+#   include <netinet/in.h>
+#   include <arpa/inet.h>
 #endif
 
 #include <stdint.h>
 
 #if defined HAVE_ERRNO_H
-#	include <errno.h>
+#   include <errno.h>
 #endif
 
 #if defined HAVE_UNISTD_H
-#	include <unistd.h>
+#   include <unistd.h>
 #endif
 
 /* We've got to get FIONBIO from somewhere. Try the Solaris location
-	if it isn't defined yet by the above includes. */
+    if it isn't defined yet by the above includes. */
 #ifndef FIONBIO
-#	include <sys/filio.h>
+#   include <sys/filio.h>
 #endif /* FIONBIO */
 
 #if HAVE_SSIZE_T
-#	define SSIZE_T ssize_t
+#   define SSIZE_T ssize_t
 #else
-#	define SSIZE_T int
+#   define SSIZE_T int
 #endif
 
 #if HAVE_SOCKLEN_T
-#	define SOCKLEN_T socklen_t
+#   define SOCKLEN_T socklen_t
 #else
-#	define SOCKLEN_T int
+#   define SOCKLEN_T int
 #endif
 
 #if _WIN32
-#	define FIONBIO_ARG_T u_long
+#   define FIONBIO_ARG_T u_long
 #else
-#	define FIONBIO_ARG_T int
+#   define FIONBIO_ARG_T int
 #endif
 
 #if _WIN32
-	/* _WIN32 doesn't really have WSAEAGAIN */
-#	ifndef WSAEAGAIN
-#		define WSAEAGAIN WSAEWOULDBLOCK
-#	endif
-#	ifdef gai_strerror
-#		undef gai_strerror
-#		define gai_strerror gai_strerrorA
-#	endif
+    /* _WIN32 doesn't really have WSAEAGAIN */
+#   ifndef WSAEAGAIN
+#       define WSAEAGAIN WSAEWOULDBLOCK
+#   endif
+#   ifdef gai_strerror
+#       undef gai_strerror
+#       define gai_strerror gai_strerrorA
+#   endif
 #else
-	/* Windows sockets compatibility defines */
-#	define INVALID_SOCKET (-1)
-#	define SOCKET_ERROR (-1)
+    /* Windows sockets compatibility defines */
+#   define INVALID_SOCKET (-1)
+#   define SOCKET_ERROR (-1)
 static inline int closesocket(int s) {
-	return close(s);
+    return close(s);
 }
-#	define WSAEWOULDBLOCK EWOULDBLOCK
-#	define WSAEAGAIN EAGAIN
-#	define WSAEINPROGRESS EINPROGRESS
-#	define WSAEINTR EINTR
-#	define SOCKET int
+#   define WSAEWOULDBLOCK EWOULDBLOCK
+#   define WSAEAGAIN EAGAIN
+#   define WSAEINPROGRESS EINPROGRESS
+#   define WSAEINTR EINTR
+#   define SOCKET int
 static inline int GetLastError(void) {
-	return errno;
+    return errno;
 }
 #endif /* _WIN32 */
 

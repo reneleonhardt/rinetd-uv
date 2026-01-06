@@ -1,7 +1,7 @@
 #  Copyright © 1997—1999 Thomas Boutell <boutell@boutell.com>
 #                        and Boutell.Com, Inc.
 #            © 2003—2021 Sam Hocevar <sam@hocevar.net>
-#			 © 2026 Marcin Gryszkalis <mg@fork.pl>
+#            © 2026 Marcin Gryszkalis <mg@fork.pl>
 #
 #  This software is released for free use under the terms of
 #  the GNU Public License, version 2 or higher. NO WARRANTY
@@ -9,7 +9,7 @@
 
 %{
 #if HAVE_CONFIG_H
-#	include <config.h>
+#   include <config.h>
 #endif
 
 #include "net.h"
@@ -19,23 +19,23 @@
 
 #define YY_CTX_LOCAL 1
 #define YY_CTX_MEMBERS \
-	FILE *fp; \
-	int currentLine; \
-	int isAuthAllow; \
-	char *tmpPort, *bindPort, *connectPort; \
-	int tmpProto, bindProto, connectProto; \
-	int serverTimeout; \
-	char *bindAddress, *connectAddress, *sourceAddress;
+    FILE *fp; \
+    int currentLine; \
+    int isAuthAllow; \
+    char *tmpPort, *bindPort, *connectPort; \
+    int tmpProto, bindProto, connectProto; \
+    int serverTimeout; \
+    char *bindAddress, *connectAddress, *sourceAddress;
 #define YY_INPUT(yyctx, buf, result, max_size) \
 { \
-	int yyc = fgetc(yyctx->fp); \
-	result = (EOF == yyc) ? 0 : (*(buf) = yyc, 1); \
+    int yyc = fgetc(yyctx->fp); \
+    result = (EOF == yyc) ? 0 : (*(buf) = yyc, 1); \
 }
 #define PARSE_ERROR exit(1);
 #define MEMORY_ERROR { \
-		logError("could not allocate memory when parsing configuration.\n"); \
-		exit(1); \
-	}
+        logError("could not allocate memory when parsing configuration.\n"); \
+        exit(1); \
+    }
 
 #if defined __clang__
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -54,18 +54,18 @@ comment  =  "#" (!eol .)*
 
 server-rule  =  bind-address - bind-port - connect-address - connect-port (-? server-options)?
 {
-	addServer(yy->bindAddress, yy->bindPort, yy->bindProto,
-		yy->connectAddress, yy->connectPort, yy->connectProto,
-		yy->serverTimeout > 0 ? yy->serverTimeout : RINETD_DEFAULT_UDP_TIMEOUT,
-		yy->sourceAddress);
-	free(yy->bindAddress);
-	free(yy->connectAddress);
-	free(yy->sourceAddress);
-	yy->bindAddress = yy->connectAddress = yy->sourceAddress = NULL;
-	free(yy->bindPort);
-	free(yy->connectPort);
-	yy->bindPort = yy->connectPort = NULL;
-	yy->serverTimeout = 0;
+    addServer(yy->bindAddress, yy->bindPort, yy->bindProto,
+        yy->connectAddress, yy->connectPort, yy->connectProto,
+        yy->serverTimeout > 0 ? yy->serverTimeout : RINETD_DEFAULT_UDP_TIMEOUT,
+        yy->sourceAddress);
+    free(yy->bindAddress);
+    free(yy->connectAddress);
+    free(yy->sourceAddress);
+    yy->bindAddress = yy->connectAddress = yy->sourceAddress = NULL;
+    free(yy->bindPort);
+    free(yy->connectPort);
+    yy->bindPort = yy->connectPort = NULL;
+    yy->serverTimeout = 0;
 }
 
 bind-address     =  < address > { yy->bindAddress = strdup(yytext); }
@@ -88,65 +88,65 @@ proto  = '/tcp'                   { yy->tmpProto = IPPROTO_TCP; }
 
 auth-rule  =  auth-key - < pattern >
 {
-	allRules = (Rule *)
-		realloc(allRules, sizeof(Rule) * (allRulesCount + 1));
-	if (!allRules) {
-		MEMORY_ERROR;
-	}
-	allRules[allRulesCount].pattern = strdup(yytext);
-	if (!allRules[allRulesCount].pattern) {
-		MEMORY_ERROR;
-	}
-	allRules[allRulesCount].type = yy->isAuthAllow ? allowRule : denyRule;
-	if (seTotal > 0) {
-		if (seInfo[seTotal - 1].rulesStart == 0 && seInfo[seTotal - 1].rulesCount == 0) {
-			seInfo[seTotal - 1].rulesStart = allRulesCount;
-		}
-		++seInfo[seTotal - 1].rulesCount;
-	} else {
-		++globalRulesCount;
-	}
-	++allRulesCount;
+    allRules = (Rule *)
+        realloc(allRules, sizeof(Rule) * (allRulesCount + 1));
+    if (!allRules) {
+        MEMORY_ERROR;
+    }
+    allRules[allRulesCount].pattern = strdup(yytext);
+    if (!allRules[allRulesCount].pattern) {
+        MEMORY_ERROR;
+    }
+    allRules[allRulesCount].type = yy->isAuthAllow ? allowRule : denyRule;
+    if (seTotal > 0) {
+        if (seInfo[seTotal - 1].rulesStart == 0 && seInfo[seTotal - 1].rulesCount == 0) {
+            seInfo[seTotal - 1].rulesStart = allRulesCount;
+        }
+        ++seInfo[seTotal - 1].rulesCount;
+    } else {
+        ++globalRulesCount;
+    }
+    ++allRulesCount;
 }
 
 auth-key = < ("allow" | "deny") >         { yy->isAuthAllow = (yytext[0] == 'a'); }
 
 logfile  =  "logfile" - < filename >
 {
-	logFileName = strdup(yytext);
-	if (!logFileName) {
-		MEMORY_ERROR;
-	}
+    logFileName = strdup(yytext);
+    if (!logFileName) {
+        MEMORY_ERROR;
+    }
 }
 
 pidfile  =  "pidfile" - < filename >
 {
-	pidLogFileName = strdup(yytext);
-	if (!pidLogFileName) {
-		MEMORY_ERROR;
-	}
+    pidLogFileName = strdup(yytext);
+    if (!pidLogFileName) {
+        MEMORY_ERROR;
+    }
 }
 
 logcommon  =  "logcommon"
 {
-	logFormatCommon = 1;
+    logFormatCommon = 1;
 }
 
 buffersize  =  "buffersize" - < number >
 {
-	bufferSize = atoi(yytext);
-	if (bufferSize < 1024 || bufferSize > 1048576) {
-		logError("invalid buffer size %d at line %d (must be 1024-1048576)\n",
-		         bufferSize, yy->currentLine);
-		PARSE_ERROR;
-	}
+    bufferSize = atoi(yytext);
+    if (bufferSize < 1024 || bufferSize > 1048576) {
+        logError("invalid buffer size %d at line %d (must be 1024-1048576)\n",
+                 bufferSize, yy->currentLine);
+        PARSE_ERROR;
+    }
 }
 
 invalid_syntax  =  < (!eol .)+ > eol
 {
-	logError("invalid syntax at line %d: %s\n",
-	        yy->currentLine, yytext);
-	PARSE_ERROR; /* FIXME */
+    logError("invalid syntax at line %d: %s\n",
+            yy->currentLine, yytext);
+    PARSE_ERROR; /* FIXME */
 }
 
 service  =  name
@@ -177,24 +177,24 @@ eof      =  '\0'
 
 void parseConfiguration(char const *file)
 {
-	FILE *in = fopen(file, "r");
-	if (!in) {
-		logError("could not open configuration file %s.\n", file);
-		exit(1);
-	}
+    FILE *in = fopen(file, "r");
+    if (!in) {
+        logError("could not open configuration file %s.\n", file);
+        exit(1);
+    }
 
-	yycontext ctx;
-	memset(&ctx, 0, sizeof(yycontext));
-	ctx.fp = in;
-	if (!yyparse(&ctx)) {
-		logError("invalid syntax in file %s, line %d.\n", file, -1);
-		exit(1);
-	}
-	yyrelease(&ctx);
+    yycontext ctx;
+    memset(&ctx, 0, sizeof(yycontext));
+    ctx.fp = in;
+    if (!yyparse(&ctx)) {
+        logError("invalid syntax in file %s, line %d.\n", file, -1);
+        exit(1);
+    }
+    yyrelease(&ctx);
 
-	fclose(in);
+    fclose(in);
 
-	/* Avoid warnings for these unused functions */
-	(void)yySet; (void)yyPush; (void)yyPop; (void)yyAccept;
+    /* Avoid warnings for these unused functions */
+    (void)yySet; (void)yyPush; (void)yyPop; (void)yyAccept;
 }
 
