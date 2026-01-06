@@ -101,6 +101,7 @@ static RinetdOptions options = {
 };
 
 static int forked = 0;
+static int config_reload_pending = 0;
 
 static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socket);
 static ConnectionInfo *allocateConnection(void);
@@ -293,6 +294,17 @@ static void clearConfiguration(void) {
 		free(seInfo);
 		seInfo = NULL;
 		seTotal = 0;
+
+		/* If config reload is pending, reload now (no async handles to wait for) */
+		if (config_reload_pending) {
+			config_reload_pending = 0;
+			readConfiguration(options.conf_file);
+			/* Start new servers listening */
+			for (int i = 0; i < seTotal; ++i) {
+				startServerListening(&seInfo[i]);
+			}
+			logInfo("configuration reloaded, %d server(s) listening\n", seTotal);
+		}
 	}
 	/* Otherwise, seInfo will be freed in server_handle_close_cb after all handles close */
 	/* Forget existing rules. */
@@ -546,9 +558,9 @@ static void server_handle_close_cb(uv_handle_t *handle)
 
 	int all_closed = 1;
 	for (int i = 0; i < seTotal; ++i) {
-		if (seInfo[i].handle_initialized ||
-		    uv_is_closing((uv_handle_t*)&seInfo[i].uv_handle.tcp) ||
-		    uv_is_closing((uv_handle_t*)&seInfo[i].uv_handle.udp)) {
+		/* If handle_initialized is 0, the close callback has fired and we're done.
+		   We don't check uv_is_closing() because it returns true DURING the callback. */
+		if (seInfo[i].handle_initialized) {
 			all_closed = 0;
 			break;
 		}
@@ -558,6 +570,17 @@ static void server_handle_close_cb(uv_handle_t *handle)
 		free(seInfo);
 		seInfo = NULL;
 		seTotal = 0;
+
+		/* If config reload is pending, reload now that all handles are closed */
+		if (config_reload_pending) {
+			config_reload_pending = 0;
+			readConfiguration(options.conf_file);
+			/* Start new servers listening */
+			for (int i = 0; i < seTotal; ++i) {
+				startServerListening(&seInfo[i]);
+			}
+			logInfo("configuration reloaded, %d server(s) listening\n", seTotal);
+		}
 	}
 }
 
@@ -1414,10 +1437,17 @@ static int checkConnectionAllowed(ConnectionInfo const *cnx)
 RETSIGTYPE hup(int s)
 {
 	(void)s;
+
+	/* Ignore if reload is already in progress */
+	if (config_reload_pending) {
+		return;
+	}
+
 	logInfo("received SIGHUP, reloading configuration...\n");
-	/* Learn the new rules */
+	/* Set flag - readConfiguration() will be called after all handles close */
+	config_reload_pending = 1;
+	/* Clear old configuration - this starts async close of server handles */
 	clearConfiguration();
-	readConfiguration(options.conf_file);
 #if !HAVE_SIGACTION
 	/* And reinstall the signal handler */
 	signal(SIGHUP, hup);
