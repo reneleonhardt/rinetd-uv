@@ -120,6 +120,12 @@ struct _connection_info
 	int coLog;
 	ServerInfo const *server; // only useful for logEvent
 
+	/* Server info cached for logging (survives server reloads) */
+	char *log_fromHost;
+	uint16_t log_fromPort;
+	char *log_toHost;
+	uint16_t log_toPort;
+
 	/* Linked list for tracking active connections */
 	struct _connection_info *next;
 };

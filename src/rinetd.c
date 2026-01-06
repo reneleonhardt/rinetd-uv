@@ -105,6 +105,7 @@ static int config_reload_pending = 0;
 
 static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socket);
 static ConnectionInfo *allocateConnection(void);
+static void cacheServerInfoForLogging(ConnectionInfo *cnx, ServerInfo const *srv);
 static int checkConnectionAllowed(ConnectionInfo const *cnx);
 
 static int readArgs (int argc, char **argv, RinetdOptions *options);
@@ -451,6 +452,19 @@ static ConnectionInfo *allocateConnection(void)
 	return cnx;
 }
 
+/* Cache server info for logging - survives server reload/removal */
+static void cacheServerInfoForLogging(ConnectionInfo *cnx, ServerInfo const *srv)
+{
+	if (!cnx || !srv) {
+		return;
+	}
+
+	cnx->log_fromHost = strdup(srv->fromHost);
+	cnx->log_fromPort = getPort(srv->fromAddrInfo);
+	cnx->log_toHost = strdup(srv->toHost);
+	cnx->log_toPort = getPort(srv->toAddrInfo);
+}
+
 /* libuv callback forward declarations */
 static void tcp_server_accept_cb(uv_stream_t *server, int status);
 
@@ -692,6 +706,7 @@ static void tcp_server_accept_cb(uv_stream_t *server, int status)
 	cnx->coClosing = 0;
 	cnx->coLog = logUnknownError;
 	cnx->server = srv;
+	cacheServerInfoForLogging(cnx, srv);
 	cnx->timer_initialized = 0;
 
 	/* Check access rules */
@@ -960,6 +975,10 @@ static void handle_close_cb(uv_handle_t *handle)
 		cnx->remote_uv_handle.tcp.data = NULL;  /* Union - sets both tcp.data and udp.data */
 		cnx->timeout_timer.data = NULL;
 
+		/* Free cached logging info */
+		free(cnx->log_fromHost);
+		free(cnx->log_toHost);
+
 		/* Now safe to free the connection (no fixed buffers to free) */
 		free(cnx);
 	}
@@ -1202,6 +1221,7 @@ static void udp_server_recv_cb(uv_udp_t *handle, ssize_t nread,
 	cnx->remoteAddress = *(struct sockaddr_storage*)addr;
 	cnx->remoteTimeout = time(NULL) + srv->serverTimeout;
 	cnx->server = srv;
+	cacheServerInfoForLogging(cnx, srv);
 
 	/* Remote handle shared with server (don't initialize separate handle) */
 	cnx->remote_handle_initialized = 0;
@@ -1514,7 +1534,14 @@ static void logEvent(ConnectionInfo const *cnx, ServerInfo const *srv, int resul
 
 	char const *fromHost = "?", *toHost = "?";
 	uint16_t fromPort = 0, toPort = 0;
-	if (srv != NULL) {
+	/* Use cached server info from connection (survives server reload) */
+	if (cnx && cnx->log_fromHost) {
+		fromHost = cnx->log_fromHost;
+		fromPort = cnx->log_fromPort;
+		toHost = cnx->log_toHost;
+		toPort = cnx->log_toPort;
+	} else if (srv != NULL) {
+		/* Fallback to srv if cached info not available */
 		fromHost = srv->fromHost;
 		fromPort = getPort(srv->fromAddrInfo);
 		toHost = srv->toHost;
