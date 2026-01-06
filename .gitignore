@@ -13,9 +13,16 @@ config.status
 configure
 
 *.o
-rinetd
-rinetd.exe
+rinetd-uv
+rinetd-uv.exe
 
 *.vcxproj.user
 Debug
 Release
+
+.claude
+
+rinetd-uv.log
+
+__pycache__
+
