@@ -65,6 +65,7 @@ char *logFileName = NULL;
 char *pidLogFileName = NULL;
 int logFormatCommon = 0;
 FILE *logFile = NULL;
+int bufferSize = RINETD_DEFAULT_BUFFER_SIZE;
 
 char const *logMessages[] = {
 	"unknown-error",
@@ -512,10 +513,10 @@ static void server_handle_close_cb(uv_handle_t *handle)
 	}
 
 	ServerInfo *srv = (ServerInfo*)handle->data;
-	
+
 	/* Mark handle as no longer initialized */
 	srv->handle_initialized = 0;
-	
+
 	/* Close the underlying socket */
 	if (srv->fd != INVALID_SOCKET) {
 		closesocket(srv->fd);
@@ -541,17 +542,17 @@ static void server_handle_close_cb(uv_handle_t *handle)
 	if (!seInfo) {
 		return;  /* Already freed */
 	}
-	
+
 	int all_closed = 1;
 	for (int i = 0; i < seTotal; ++i) {
-		if (seInfo[i].handle_initialized || 
+		if (seInfo[i].handle_initialized ||
 		    uv_is_closing((uv_handle_t*)&seInfo[i].uv_handle.tcp) ||
 		    uv_is_closing((uv_handle_t*)&seInfo[i].uv_handle.udp)) {
 			all_closed = 0;
 			break;
 		}
 	}
-	
+
 	if (all_closed) {
 		free(seInfo);
 		seInfo = NULL;
@@ -731,12 +732,12 @@ static void alloc_buffer_udp_server_cb(uv_handle_t *handle, size_t suggested_siz
 	(void)handle;
 	(void)suggested_size;
 
-	/* Allocate a temporary buffer for UDP datagrams */
-	buf->base = malloc(RINETD_BUFFER_SIZE);
+	/* Allocate buffer for UDP datagrams */
+	buf->base = malloc(bufferSize);
 	if (!buf->base) {
 		buf->len = 0;
 	} else {
-		buf->len = RINETD_BUFFER_SIZE;
+		buf->len = bufferSize;
 	}
 }
 
@@ -745,9 +746,10 @@ static void alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
                             uv_buf_t *buf)
 {
 	(void)handle;  /* Unused - we don't need connection info to allocate */
+	(void)suggested_size;  /* Use configured bufferSize instead */
 
-	/* Allocate a fresh buffer for each read - will be freed in write callback */
-	char *buffer = (char*)malloc(suggested_size);
+	/* Allocate buffer for each read - will be freed in write callback */
+	char *buffer = (char*)malloc(bufferSize);
 	if (!buffer) {
 		logError("malloc failed for read buffer\n");
 		buf->base = NULL;
@@ -756,7 +758,7 @@ static void alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
 	}
 
 	buf->base = buffer;
-	buf->len = suggested_size;
+	buf->len = bufferSize;
 }
 
 /* Forward declaration for write callback */
@@ -1083,18 +1085,8 @@ static void udp_local_recv_cb(uv_udp_t *handle, ssize_t nread,
 	/* Update statistics */
 	cnx->local.totalBytesIn += nread;
 
-	/* Allocate a copy of the buffer for sending (buf->base will be freed by libuv) */
-	char *data_copy = (char*)malloc(nread);
-	if (!data_copy) {
-		logError("malloc failed for UDP data copy\n");
-		free(buf->base);
-		return;
-	}
-	memcpy(data_copy, buf->base, nread);
-	free(buf->base);
-
-	/* Send immediately to client - udp_send_to_client takes ownership of data_copy */
-	udp_send_to_client(cnx, data_copy, (int)nread);
+	/* Send immediately to client - udp_send_to_client takes ownership of buf->base */
+	udp_send_to_client(cnx, buf->base, (int)nread);
 }
 
 /* UDP server receive callback */
@@ -1140,18 +1132,8 @@ static void udp_server_recv_cb(uv_udp_t *handle, ssize_t nread,
 		/* Update statistics */
 		cnx->remote.totalBytesIn += nread;
 
-		/* Allocate a copy of the buffer for sending */
-		char *data_copy = (char*)malloc(nread);
-		if (!data_copy) {
-			logError("malloc failed for UDP data copy\n");
-			free(buf->base);
-			return;
-		}
-		memcpy(data_copy, buf->base, nread);
-		free(buf->base);
-
-		/* Send immediately to backend - udp_send_to_backend takes ownership */
-		udp_send_to_backend(cnx, data_copy, (int)nread);
+		/* Send immediately to backend - udp_send_to_backend takes ownership of buf->base */
+		udp_send_to_backend(cnx, buf->base, (int)nread);
 		return;
 	}
 
@@ -1235,19 +1217,8 @@ static void udp_server_recv_cb(uv_udp_t *handle, ssize_t nread,
 	/* Update statistics for initial data */
 	cnx->remote.totalBytesIn += nread;
 
-	/* Allocate a copy of the buffer for sending */
-	char *data_copy = (char*)malloc(nread);
-	if (!data_copy) {
-		logError("malloc failed for UDP data copy\n");
-		free(buf->base);
-		handleClose(cnx, &cnx->local, &cnx->remote);
-		return;
-	}
-	memcpy(data_copy, buf->base, nread);
-	free(buf->base);
-
-	/* Send initial data to backend - udp_send_to_backend takes ownership */
-	udp_send_to_backend(cnx, data_copy, (int)nread);
+	/* Send initial data to backend - udp_send_to_backend takes ownership of buf->base */
+	udp_send_to_backend(cnx, buf->base, (int)nread);
 
 	logEvent(cnx, srv, logOpened);
 }

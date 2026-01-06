@@ -48,7 +48,7 @@
 
 file     =  (sol (line eol | invalid-syntax))*
 line     =  -? (command -?)? comment?
-command  =  (server-rule | auth-rule | logfile | pidlogfile | logcommon)
+command  =  (server-rule | auth-rule | logfile | pidlogfile | logcommon | buffersize)
 comment  =  "#" (!eol .)*
 
 server-rule  =  bind-address - bind-port - connect-address - connect-port (-? server-options)?
@@ -129,6 +129,16 @@ pidlogfile  =  "pidlogfile" - < filename >
 logcommon  =  "logcommon"
 {
 	logFormatCommon = 1;
+}
+
+buffersize  =  "buffersize" - < number >
+{
+	bufferSize = atoi(yytext);
+	if (bufferSize < 1024 || bufferSize > 1048576) {
+		logError("invalid buffer size %d at line %d (must be 1024-1048576)\n",
+		         bufferSize, yy->currentLine);
+		PARSE_ERROR;
+	}
 }
 
 invalid_syntax  =  < (!eol .)+ > eol

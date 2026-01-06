@@ -12,7 +12,7 @@
 
 /* Constants */
 
-static int const RINETD_BUFFER_SIZE = 65536;
+static int const RINETD_DEFAULT_BUFFER_SIZE = 65536;
 static int const RINETD_LISTEN_BACKLOG = 128;
 static int const RINETD_DEFAULT_UDP_TIMEOUT = 72;
 
@@ -32,6 +32,7 @@ extern char *logFileName;
 extern char *pidLogFileName;
 extern int logFormatCommon;
 extern FILE *logFile;
+extern int bufferSize;
 
 /* Functions */
 
