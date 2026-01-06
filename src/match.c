@@ -19,11 +19,6 @@ int match(char const *sorig, char const *p)
 	return matchBody(sorig, p, 0);
 }
 
-int matchNoCase(char const *sorig, char const *p)
-{
-	return matchBody(sorig, p, 1);
-}
-
 #define CASE(x) (nocase ? tolower(x) : (x))
 
 int matchBody(char const *sorig, char const *p, int nocase)

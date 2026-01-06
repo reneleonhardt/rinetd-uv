@@ -37,12 +37,6 @@
 #include <ctype.h>
 #include <syslog.h>
 
-#ifdef DEBUG
-#	define PERROR perror
-#else
-#	define PERROR(x)
-#endif /* DEBUG */
-
 #include "match.h"
 #include "net.h"
 #include "types.h"
@@ -59,16 +53,6 @@ int seTotal = 0;
 /* Connection management - now using dynamic allocation instead of pool */
 static ConnectionInfo *connectionListHead = NULL;
 static int activeConnections = 0;
-static int totalConnections = 0;  /* For statistics */
-
-/* On Windows, the maximum number of file descriptors in an fd_set
-	is simply FD_SETSIZE and the first argument to select() is
-	ignored, so maxfd will never change. */
-#ifdef _WIN32
-int const maxfd = 0;
-#else
-int maxfd = 0;
-#endif
 
 /* libuv event loop */
 static uv_loop_t *main_loop = NULL;
@@ -129,9 +113,6 @@ static void logEvent(ConnectionInfo const *cnx, ServerInfo const *srv, int resul
 static struct tm *get_gmtoff(int *tz);
 
 /* Signal handlers */
-#if !HAVE_SIGACTION && !_WIN32
-static RETSIGTYPE plumber(int s);
-#endif
 #if !_WIN32
 static RETSIGTYPE hup(int s);
 #endif
@@ -385,10 +366,9 @@ void addServer(char *bindAddress, char *bindPort, int bindProtocol,
 
 	if (bindProtocol == IPPROTO_TCP) {
 		if (listen(si.fd, RINETD_LISTEN_BACKLOG) == SOCKET_ERROR) {
-			/* Warn -- don't exit. */
+			/* Warn and close socket -- but continue with other servers */
 			logError("couldn't listen to address %s port %s (%m)\n",
 				bindAddress, bindPort);
-			/* XXX: check whether this is correct */
 			closesocket(si.fd);
 		}
 
@@ -422,12 +402,6 @@ void addServer(char *bindAddress, char *bindPort, int bindProtocol,
 	si.handle_type = (bindProtocol == IPPROTO_TCP) ? UV_TCP : UV_UDP;
 	si.handle_initialized = 0;
 
-#ifndef _WIN32
-	if (si.fd > maxfd) {
-		maxfd = si.fd;
-	}
-#endif
-
 	/* Allocate server info */
 	seInfo = (ServerInfo *)realloc(seInfo, sizeof(ServerInfo) * (seTotal + 1));
 	if (!seInfo) {
@@ -459,7 +433,6 @@ static ConnectionInfo *allocateConnection(void)
 	connectionListHead = cnx;
 
 	activeConnections++;
-	totalConnections++;
 
 	return cnx;
 }
@@ -759,11 +732,11 @@ static void alloc_buffer_udp_server_cb(uv_handle_t *handle, size_t suggested_siz
 	(void)suggested_size;
 
 	/* Allocate a temporary buffer for UDP datagrams */
-	buf->base = malloc(65536);
+	buf->base = malloc(RINETD_BUFFER_SIZE);
 	if (!buf->base) {
 		buf->len = 0;
 	} else {
-		buf->len = 65536;
+		buf->len = RINETD_BUFFER_SIZE;
 	}
 }
 
@@ -1429,14 +1402,6 @@ static int checkConnectionAllowed(ConnectionInfo const *cnx)
 
 	return logAllowed;
 }
-
-#if !HAVE_SIGACTION && !_WIN32
-RETSIGTYPE plumber(int s)
-{
-	/* Just reinstall */
-	signal(SIGPIPE, plumber);
-}
-#endif
 
 #if !_WIN32
 RETSIGTYPE hup(int s)
