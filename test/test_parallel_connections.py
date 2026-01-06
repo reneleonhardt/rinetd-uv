@@ -94,10 +94,10 @@ def test_connection(conn_id, host, port, timeout, resource_path=None, expected_s
         with active_connections_lock:
             active_connections[conn_id]['state'] = 'requesting'
 
-        # Make HTTP request using requests library
+        # Make HTTP request using requests library with streaming
         # Note: timeout is socket inactivity timeout, not total request time
-        # For chunked responses, this may hang if server doesn't close connection properly
-        response = requests.get(url, timeout=timeout, stream=False)
+        # stream=True allows us to process data incrementally without loading entire response into memory
+        response = requests.get(url, timeout=timeout, stream=True)
 
         with active_connections_lock:
             active_connections[conn_id]['state'] = 'response_received'
@@ -116,18 +116,35 @@ def test_connection(conn_id, host, port, timeout, resource_path=None, expected_s
                 'error': error_msg
             }
 
-        # If resource validation is requested, verify SHA256
+        # Stream and optionally validate SHA256 on-the-fly
+        # This avoids loading the entire file into memory
+        bytes_received = 0
+        sha256_hash = None
+
         if expected_sha256:
             with active_connections_lock:
-                active_connections[conn_id]['state'] = 'hashing'
+                active_connections[conn_id]['state'] = 'streaming_and_hashing'
+            sha256_hash = hashlib.sha256()
+        else:
+            with active_connections_lock:
+                active_connections[conn_id]['state'] = 'streaming'
 
-            actual_sha256 = hashlib.sha256(response.content).hexdigest()
+        # Stream in 64KB chunks (good balance between syscalls and memory usage)
+        for chunk in response.iter_content(chunk_size=65536):
+            if chunk:  # Filter out keep-alive chunks
+                bytes_received += len(chunk)
+                if sha256_hash:
+                    sha256_hash.update(chunk)
+
+        # Validate SHA256 if requested
+        if expected_sha256:
+            actual_sha256 = sha256_hash.hexdigest()
 
             with active_connections_lock:
                 active_connections[conn_id]['state'] = 'hash_complete'
 
             if actual_sha256 != expected_sha256:
-                error_msg = f"SHA256 mismatch: expected {expected_sha256[:16]}..., got {actual_sha256[:16]}..."
+                error_msg = f"SHA256 mismatch: expected {expected_sha256[:16]}..., got {actual_sha256[:16]}... ({bytes_received} bytes)"
                 with results_lock:
                     results['failed'] += 1
                     results['errors'].append(error_msg)
@@ -151,7 +168,7 @@ def test_connection(conn_id, host, port, timeout, resource_path=None, expected_s
             'success': True,
             'connect_time': connect_time,
             'status_code': response.status_code,
-            'response_length': len(response.content)
+            'response_length': bytes_received
         }
 
         if expected_sha256:
