@@ -18,6 +18,7 @@
    - Implemented LRU (Least Recently Used) eviction when limit reached
    - Prevents "too many open files" errors under high UDP load
    - Maintains RFC 5452 compliance (source port randomization for DNS security)
+ * **TCP keepalive:** Enabled by default for TCP connections, configurable per-rule with `keepalive=on/off` option
  * **INCOMPATIBILITY** Renamed configuration option: `pidlogfile` → `pidfile`
  * **INCOMPATIBILITY** Changed date format in log file
 

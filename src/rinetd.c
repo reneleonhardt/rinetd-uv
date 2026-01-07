@@ -344,13 +344,15 @@ static void readConfiguration(char const *file) {
 
 void addServer(char *bindAddress, char *bindPort, int bindProtocol,
                char *connectAddress, char *connectPort, int connectProtocol,
-               int serverTimeout, char *sourceAddress)
+               int serverTimeout, char *sourceAddress,
+               int keepalive)
 {
     ServerInfo si = {
         .fromHost = strdup(bindAddress),
         .toHost = strdup(connectAddress),
         .serverTimeout = serverTimeout,
         .fd = INVALID_SOCKET,
+        .keepalive = keepalive,
     };
 
     /* Resolve bind address */
@@ -624,6 +626,16 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
     uv_fileno((uv_handle_t*)&cnx->local_uv_handle.tcp, &fd);
     cnx->local.fd = fd;
 
+    /* Enable TCP keepalive on backend connection if configured */
+    if (cnx->server && cnx->server->keepalive) {
+        /* Use 60 second delay before first keepalive probe */
+        int ret = uv_tcp_keepalive(&cnx->local_uv_handle.tcp, 1, 60);
+        if (ret != 0) {
+            logError("uv_tcp_keepalive (local) error: %s\n", uv_strerror(ret));
+            /* Continue anyway - keepalive is optional */
+        }
+    }
+
     /* Start reading from local (backend) */
     int ret = uv_read_start((uv_stream_t*)&cnx->local_uv_handle.tcp,
                             alloc_buffer_cb, tcp_read_cb);
@@ -676,6 +688,16 @@ static void tcp_server_accept_cb(uv_stream_t *server, int status)
         cnx->remote_handle_closing = 1;  /* Set BEFORE uv_close() */
         uv_close((uv_handle_t*)&cnx->remote_uv_handle.tcp, handle_close_cb);
         return;
+    }
+
+    /* Enable TCP keepalive on client connection if configured */
+    if (srv->keepalive) {
+        /* Use 60 second delay before first keepalive probe */
+        ret = uv_tcp_keepalive(&cnx->remote_uv_handle.tcp, 1, 60);
+        if (ret != 0) {
+            logError("uv_tcp_keepalive (remote) error: %s\n", uv_strerror(ret));
+            /* Continue anyway - keepalive is optional */
+        }
     }
 
     /* Get remote address */

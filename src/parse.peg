@@ -25,6 +25,7 @@
     char *tmpPort, *bindPort, *connectPort; \
     int tmpProto, bindProto, connectProto; \
     int serverTimeout; \
+    int keepalive; \
     char *bindAddress, *connectAddress, *sourceAddress;
 #define YY_INPUT(yyctx, buf, result, max_size) \
 { \
@@ -54,10 +55,14 @@ comment  =  "#" (!eol .)*
 
 server-rule  =  bind-address - bind-port - connect-address - connect-port (-? server-options)?
 {
+    /* keepalive: -1 = not set (default to on), 0 = off, 1 = on */
+    int keepalive = (yy->keepalive == -1) ? 1 : yy->keepalive;
+
     addServer(yy->bindAddress, yy->bindPort, yy->bindProto,
         yy->connectAddress, yy->connectPort, yy->connectProto,
         yy->serverTimeout > 0 ? yy->serverTimeout : RINETD_DEFAULT_UDP_TIMEOUT,
-        yy->sourceAddress);
+        yy->sourceAddress,
+        keepalive);
     free(yy->bindAddress);
     free(yy->connectAddress);
     free(yy->sourceAddress);
@@ -66,6 +71,7 @@ server-rule  =  bind-address - bind-port - connect-address - connect-port (-? se
     free(yy->connectPort);
     yy->bindPort = yy->connectPort = NULL;
     yy->serverTimeout = 0;
+    yy->keepalive = -1;
 }
 
 bind-address     =  < address > { yy->bindAddress = strdup(yytext); }
@@ -74,10 +80,13 @@ bind-port        =  full-port { yy->bindPort = yy->tmpPort; yy->bindProto = yy->
 connect-port     =  full-port { yy->connectPort = yy->tmpPort; yy->connectProto = yy->tmpProto; }
 server-options   =  "[" -? option-list -? "]"
 
-option-list     =  option (-? ',' -? option-list)?
-option          =  (option-timeout | option-source)
-option-timeout  =  "timeout" -? "=" -? < number >    { yy->serverTimeout = atoi(yytext); }
-option-source   =  "src"     -? "=" -? < address >   { yy->sourceAddress = strdup(yytext); }
+option-list       =  option (-? ',' -? option-list)?
+option            =  (option-timeout | option-source | option-keepalive)
+option-timeout    =  "timeout"    -? "=" -? < number >    { yy->serverTimeout = atoi(yytext); }
+option-source     =  "src"        -? "=" -? < address >   { yy->sourceAddress = strdup(yytext); }
+option-keepalive  =  "keepalive"  -? "=" -? < keepalive_value >  { yy->keepalive = (yytext[1] == 'n') ? 1 : 0; }
+
+keepalive_value   =  "on" | "off"
 
 full-port  =  port proto
 
@@ -186,6 +195,7 @@ void parseConfiguration(char const *file)
     yycontext ctx;
     memset(&ctx, 0, sizeof(yycontext));
     ctx.fp = in;
+    ctx.keepalive = -1;
     if (!yyparse(&ctx)) {
         logError("invalid syntax in file %s, line %d.\n", file, -1);
         exit(1);

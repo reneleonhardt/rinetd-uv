@@ -42,4 +42,5 @@ void logError(char const *fmt, ...);
 void logInfo(char const *fmt, ...);
 void addServer(char *bindAddress, char *bindPort, int bindProtocol,
                char *connectAddress, char *connectPort, int connectProtocol,
-               int serverTimeout, char *sourceAddress);
+               int serverTimeout, char *sourceAddress,
+               int keepalive);

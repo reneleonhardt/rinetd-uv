@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2026-01-06" />
+  <meta name="dcterms.date" content="2026-01-07" />
   <title>rinetd-uv - internet redirection server</title>
   <style>
     code{white-space: pre-wrap;}
@@ -93,7 +93,7 @@
 <body>
 <header id="title-block-header">
 <h1 class="title">rinetd-uv - internet redirection server</h1>
-<p class="date">2026-01-06</p>
+<p class="date">2026-01-07</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -242,6 +242,13 @@ option:</p>
 <p>Assuming the local host has two IP addresses, 10.1.1.1 and 10.1.1.2,
 this rule ensures that forwarded packets are sent using source address
 10.1.1.2.</p>
+<h3 id="tcp-keepalive-option">TCP Keepalive Option</h3>
+<p>TCP keepalive is enabled by default for all TCP connections to detect
+dead connections. To disable it for a specific forwarding rule, use the
+<em>keepalive</em> option:</p>
+<pre><code>192.168.1.1 80/tcp  10.1.1.127 80/tcp  [keepalive=off]</code></pre>
+<p>When enabled, keepalive probes are sent after 60 seconds of
+inactivity.</p>
 <h2 id="global-configuration-options">GLOBAL CONFIGURATION OPTIONS</h2>
 <h3 id="buffer-size">Buffer Size</h3>
 <p>The buffer size used for I/O operations can be configured globally.
@@ -357,7 +364,8 @@ deny 2001:618:*:e43f
 
 # Forwarding options:
 # Format: bindaddress bindport connectaddress connectport [options]
-# Options: [timeout=seconds,src=sourceaddress]
+# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off]
+# Note: TCP keepalive is enabled by default
 
 # TCP forwarding examples
 0.0.0.0 80/tcp 192.168.1.10 8080/tcp
@@ -375,11 +383,11 @@ allow 10.0.0.*
 <p>The SIGHUP signal can be used to cause <strong>rinetd-uv</strong> to
 reload its configuration file without interrupting existing
 connections.</p>
-<div class="sourceCode" id="cb16"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd-uv.pid<span class="va">)</span></span></code></pre></div>
-<p>Or simply:</p>
 <div class="sourceCode" id="cb17"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd-uv.pid<span class="va">)</span></span></code></pre></div>
+<p>Or simply:</p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
 <h2 id="bugs-and-limitations">BUGS AND LIMITATIONS</h2>
 <p><strong>rinetd-uv</strong> only redirects protocols which use a
 single TCP or UDP socket. This rules out FTP (which uses multiple

@@ -53,6 +53,8 @@ struct _server_info {
     /* Track number of active UDP connections for this forwarding rule
        to prevent file descriptor exhaustion */
     int udp_connection_count;
+    /* TCP keepalive: 1 = enabled (default), 0 = disabled */
+    int keepalive;
 };
 
 typedef struct _socket Socket;

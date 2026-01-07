@@ -111,6 +111,16 @@ A forwarding rule option allows binding to a specific local address when sending
 
 Assuming the local host has two IP addresses, 10.1.1.1 and 10.1.1.2, this rule ensures that forwarded packets are sent using source address 10.1.1.2.
 
+### TCP Keepalive Option
+
+TCP keepalive is enabled by default for all TCP connections to detect dead connections. To disable it for a specific forwarding rule, use the *keepalive* option:
+
+```
+192.168.1.1 80/tcp  10.1.1.127 80/tcp  [keepalive=off]
+```
+
+When enabled, keepalive probes are sent after 60 seconds of inactivity.
+
 ## GLOBAL CONFIGURATION OPTIONS
 
 ### Buffer Size
@@ -232,7 +242,8 @@ deny 2001:618:*:e43f
 
 # Forwarding options:
 # Format: bindaddress bindport connectaddress connectport [options]
-# Options: [timeout=seconds,src=sourceaddress]
+# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off]
+# Note: TCP keepalive is enabled by default
 
 # TCP forwarding examples
 0.0.0.0 80/tcp 192.168.1.10 8080/tcp
