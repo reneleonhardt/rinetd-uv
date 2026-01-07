@@ -1,4 +1,4 @@
-## Version 2.0 (2026/01/06)
+## Version 2.0 (2026/01/07)
 
 **Major rewrite as rinetd-uv**
 
