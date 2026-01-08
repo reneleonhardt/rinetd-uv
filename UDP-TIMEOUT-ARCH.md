@@ -34,11 +34,24 @@ Unlike TCP, which is a connection-oriented protocol with explicit connection est
 ### Timeout Mechanism
 
 ```
-Client → rinetd-uv → Backend
-  |                     |
-  └─────────────────────┘
-     UDP "connection"
-     (tracked by address)
+Client                    rinetd-uv              Backend
+(e.g., 192.168.1.100:54321) (127.0.0.1:5353)      (8.8.8.8:53)
+        │                       │                      │
+        │──── UDP packet ──────>│                      │
+        │   (from 192.168.1.100:54321)                 │
+        │                       │──── forward ────────>│
+        │                       │<──── response ───────│
+        │<──── response ────────│                      │
+        │   (to 192.168.1.100:54321)                   │
+        │                       │                      │
+        └───────────────────────┴──────────────────────┘
+                UDP "pseudo-connection"
+        (tracked by: forwarding_rule + client_source_address)
+
+ConnectionInfo stores:
+  - remoteAddress = 192.168.1.100:54321 (client's source)
+  - server = pointer to forwarding rule
+  - Hash key = (server pointer, client source IP:port)
 
 Timeout timer starts when:
 - Connection is created
@@ -239,9 +252,16 @@ void remove_from_list(ConnectionInfo *conn) {
 ### Two-Tier Architecture
 
 **Tier 1: Hash Table (Global)**
-- Fast O(1) lookup by (server, remote_address) tuple
+- Fast O(1) lookup by (server, client_address) tuple
+- **Hash key components:**
+  - `server`: Pointer to `ServerInfo` (identifies which forwarding rule)
+  - `client_address`: Client's source IP address and port
 - Bucket chaining for collision resolution
 - 10,007 buckets (prime number for good distribution)
+
+**Example:** For forwarding rule `127.0.0.1:5353/udp → 8.8.8.8:53/udp`:
+- Hash key = (ServerInfo pointer, client's IP:port like `192.168.1.100:54321`)
+- This identifies a unique UDP pseudo-connection between that specific client and this forwarding rule
 
 **Tier 2: Per-Server LRU Lists**
 - Doubly-linked list per ServerInfo
@@ -266,7 +286,7 @@ Per-Server LRU Lists (one per forwarding rule)
 │  HEAD (most recent)                         │
 │    ↓                                         │
 │  conn1 ←→ conn2 ←→ conn5                   │
-│                      ↓                       │
+│                      ↑                       │
 │                    TAIL (oldest, evict me!) │
 └─────────────────────────────────────────────┘
 ```
@@ -286,27 +306,31 @@ typedef struct _connection_info {
     Socket remote, local;
     time_t remoteTimeout;
     ServerInfo const *server;
-    struct sockaddr_storage remoteAddress;
-    
+    struct sockaddr_storage remoteAddress;  /* CLIENT's source IP:port */
+
     /* Global linked list (all connections) */
     struct _connection_info *next;
-    
+
     /* Hash table chain (for fast lookup) */
     struct _connection_info *hash_next;
-    
+
     /* LRU doubly-linked list (per-server, for fast eviction) */
     struct _connection_info *lru_prev;
     struct _connection_info *lru_next;
-    
+
     // ... other fields ...
 } ConnectionInfo;
 ```
 
-**Pointers explained:**
+**Fields explained:**
+- `remoteAddress` - **Client's source IP address and port** (despite the name "remote", this is the original UDP client)
+- `server` - Pointer to the forwarding rule (ServerInfo) this connection belongs to
 - `next` - Global list of all connections (unchanged, used for iteration)
 - `hash_next` - Next connection in same hash bucket (for collision chaining)
 - `lru_prev` - Previous connection in LRU list (for O(1) removal)
 - `lru_next` - Next connection in LRU list (for O(1) removal)
+
+**Naming note:** The field `remoteAddress` stores the **client's address**, not the backend's address. In rinetd's terminology, "remote" historically referred to the client side of the proxy connection.
 
 ### ServerInfo (Modified)
 
@@ -341,29 +365,46 @@ static UdpConnectionHashTable *udp_hash_table = NULL;
 
 **Hash function (DJB2 algorithm):**
 ```c
-static uint32_t hash_udp_connection(ServerInfo const *srv, 
+static uint32_t hash_udp_connection(ServerInfo const *srv,
                                     struct sockaddr_storage const *addr)
 {
     uint32_t hash = 5381;  // Magic constant
-    
-    // Hash server pointer (different forwarding rules)
+
+    // Hash server pointer (which forwarding rule this belongs to)
     hash = ((hash << 5) + hash) + (uintptr_t)srv;
-    
-    // Hash IP address and port
+
+    // Hash client's IP address and port
     if (addr->ss_family == AF_INET) {
         struct sockaddr_in const *sin = (struct sockaddr_in const *)addr;
-        hash = ((hash << 5) + hash) + sin->sin_addr.s_addr;
-        hash = ((hash << 5) + hash) + sin->sin_port;
+        hash = ((hash << 5) + hash) + sin->sin_addr.s_addr;   // Client IP
+        hash = ((hash << 5) + hash) + sin->sin_port;          // Client port
     } else if (addr->ss_family == AF_INET6) {
         struct sockaddr_in6 const *sin6 = (struct sockaddr_in6 const *)addr;
         for (int i = 0; i < 16; i++) {
-            hash = ((hash << 5) + hash) + sin6->sin6_addr.s6_addr[i];
+            hash = ((hash << 5) + hash) + sin6->sin6_addr.s6_addr[i];  // Client IPv6
         }
-        hash = ((hash << 5) + hash) + sin6->sin6_port;
+        hash = ((hash << 5) + hash) + sin6->sin6_port;        // Client port
     }
-    
+
     return hash % UDP_HASH_TABLE_SIZE;
 }
+```
+
+**What gets hashed:**
+- `srv` - ServerInfo pointer identifying the forwarding rule (e.g., 127.0.0.1:5353 → 8.8.8.8:53)
+- `addr` - **Client's source address** (IP and port from which the UDP packet originated)
+
+**Example hash key:**
+```
+Forwarding rule: 0.0.0.0:53/udp → 8.8.8.8:53/udp (srv = 0x55a1b2c3d4e0)
+Client sends from: 192.168.1.100:54321
+
+Hash input:
+  - Server pointer: 0x55a1b2c3d4e0
+  - Client IP: 192.168.1.100 (0xC0A80164)
+  - Client port: 54321 (0xD431)
+
+Hash output: bucket index 4293 (out of 10,007 buckets)
 ```
 
 **Why DJB2?**
@@ -382,13 +423,16 @@ static uint32_t hash_udp_connection(ServerInfo const *srv,
 
 ### 1. New UDP Packet Arrives
 
+**Scenario:** A client (e.g., `192.168.1.100:54321`) sends a UDP packet to rinetd-uv's listening port (e.g., `127.0.0.1:5353`). rinetd-uv needs to determine if this is a new client or an existing connection.
+
 **Flow:**
 ```
-UDP packet from client
+UDP packet from client 192.168.1.100:54321
     ↓
-udp_server_recv_cb()
+udp_server_recv_cb(handle, nread, buf, addr, flags)
     ↓
 hash_lookup_udp_connection(srv, addr)
+  [lookup by: (forwarding_rule, client_source_ip:port)]
     ↓
   [exists?]
    ↙    ↘
@@ -397,7 +441,7 @@ hash_lookup_udp_connection(srv, addr)
 Touch  Create new
 LRU    connection
   ↓      ↓
-Forward data
+Forward data to backend
 ```
 
 **Step-by-step:**
@@ -405,10 +449,15 @@ Forward data
 **Step 1: Hash lookup**
 ```c
 struct sockaddr_storage addr_storage;
-memcpy(&addr_storage, addr, addr_len);
+memcpy(&addr_storage, addr, addr_len);  // addr = client's source address
 
 ConnectionInfo *cnx = lookup_udp_connection(srv, &addr_storage);
 ```
+
+**What's being looked up:**
+- `srv` - The forwarding rule (e.g., 127.0.0.1:5353 → 8.8.8.8:53)
+- `addr_storage` - **The client's source address** (e.g., 192.168.1.100:54321)
+- Goal: Find if we already have a pseudo-connection for this (rule, client) pair
 
 **Internal hash lookup (O(1) expected):**
 ```c
