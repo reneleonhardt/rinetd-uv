@@ -26,6 +26,9 @@ struct _rule
     ruleType type;
 };
 
+/* Forward declarations */
+typedef struct _connection_info ConnectionInfo;
+
 typedef struct _server_info ServerInfo;
 struct _server_info {
     SOCKET fd;
@@ -53,6 +56,9 @@ struct _server_info {
     /* Track number of active UDP connections for this forwarding rule
        to prevent file descriptor exhaustion */
     int udp_connection_count;
+    /* UDP LRU list for O(1) eviction */
+    ConnectionInfo *udp_lru_head;   /* Most recently used (front) */
+    ConnectionInfo *udp_lru_tail;   /* Least recently used (back) - evict this */
     /* TCP keepalive: 1 = enabled (default), 0 = disabled */
     int keepalive;
 };
@@ -131,6 +137,11 @@ struct _connection_info
 
     /* Linked list for tracking active connections */
     struct _connection_info *next;
+
+    /* UDP-specific fields for hash table and LRU */
+    struct _connection_info *hash_next;     /* Next in hash bucket chain */
+    struct _connection_info *lru_prev;      /* Previous in LRU list (per-server) */
+    struct _connection_info *lru_next;      /* Next in LRU list (per-server) */
 };
 
 /* Option parsing */

@@ -55,6 +55,16 @@ int seTotal = 0;
 static ConnectionInfo *connectionListHead = NULL;
 static int activeConnections = 0;
 
+/* UDP hash table for O(1) connection lookup */
+#define UDP_HASH_TABLE_SIZE 10007  /* Prime number for better distribution */
+
+typedef struct {
+    ConnectionInfo **buckets;
+    size_t bucket_count;
+} UdpConnectionHashTable;
+
+static UdpConnectionHashTable *udp_hash_table = NULL;
+
 /* libuv event loop */
 static uv_loop_t *main_loop = NULL;
 static int should_exit = 0;  /* Flag to signal graceful shutdown */
@@ -108,6 +118,10 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
 static ConnectionInfo *allocateConnection(void);
 static void cacheServerInfoForLogging(ConnectionInfo *cnx, ServerInfo const *srv);
 static int checkConnectionAllowed(ConnectionInfo const *cnx);
+
+/* UDP hash table and LRU functions */
+static void init_udp_hash_table(void);
+static void cleanup_udp_hash_table(void);
 
 static int readArgs(int argc, char **argv, RinetdOptions *options);
 static void clearConfiguration(void);
@@ -189,6 +203,9 @@ int main(int argc, char *argv[])
     uv_signal_init(main_loop, &sigterm_handle);
     uv_signal_start(&sigterm_handle, signal_cb, SIGTERM);
 
+    /* Initialize UDP hash table for O(1) connection lookup */
+    init_udp_hash_table();
+
     /* Start libuv event handling for all servers */
     for (int i = 0; i < seTotal; ++i) {
         startServerListening(&seInfo[i]);
@@ -214,6 +231,9 @@ int main(int argc, char *argv[])
     /* Close all remaining handles gracefully */
     uv_walk(main_loop, (uv_walk_cb)uv_close, NULL);
     uv_run(main_loop, UV_RUN_DEFAULT);  /* Process close callbacks */
+
+    /* Cleanup UDP hash table */
+    cleanup_udp_hash_table();
 
     /* Close the loop */
     uv_loop_close(main_loop);
@@ -1115,24 +1135,187 @@ static void udp_send_cb(uv_udp_send_t *req, int status)
     /* That's it! No position tracking, no buffer management */
 }
 
+/* ===== UDP Hash Table and LRU Functions ===== */
+
+/* Compare two socket addresses for equality */
+static int sockaddr_equal(struct sockaddr_storage const *a, struct sockaddr_storage const *b)
+{
+    if (a->ss_family != b->ss_family) return 0;
+
+    if (a->ss_family == AF_INET) {
+        struct sockaddr_in const *sin_a = (struct sockaddr_in const *)a;
+        struct sockaddr_in const *sin_b = (struct sockaddr_in const *)b;
+        return sin_a->sin_addr.s_addr == sin_b->sin_addr.s_addr &&
+               sin_a->sin_port == sin_b->sin_port;
+    } else if (a->ss_family == AF_INET6) {
+        struct sockaddr_in6 const *sin6_a = (struct sockaddr_in6 const *)a;
+        struct sockaddr_in6 const *sin6_b = (struct sockaddr_in6 const *)b;
+        return memcmp(&sin6_a->sin6_addr, &sin6_b->sin6_addr, 16) == 0 &&
+               sin6_a->sin6_port == sin6_b->sin6_port;
+    }
+
+    return 0;
+}
+
+/* Hash function for (server, remote_address) tuple - DJB2 algorithm */
+static uint32_t hash_udp_connection(ServerInfo const *srv, struct sockaddr_storage const *addr)
+{
+    uint32_t hash = 5381;  /* DJB2 hash initialization */
+
+    /* Hash server pointer */
+    hash = ((hash << 5) + hash) + (uintptr_t)srv;
+
+    /* Hash address based on family */
+    if (addr->ss_family == AF_INET) {
+        struct sockaddr_in const *sin = (struct sockaddr_in const *)addr;
+        hash = ((hash << 5) + hash) + sin->sin_addr.s_addr;
+        hash = ((hash << 5) + hash) + sin->sin_port;
+    } else if (addr->ss_family == AF_INET6) {
+        struct sockaddr_in6 const *sin6 = (struct sockaddr_in6 const *)addr;
+        for (int i = 0; i < 16; i++) {
+            hash = ((hash << 5) + hash) + sin6->sin6_addr.s6_addr[i];
+        }
+        hash = ((hash << 5) + hash) + sin6->sin6_port;
+    }
+
+    return hash % UDP_HASH_TABLE_SIZE;
+}
+
+/* Initialize UDP hash table */
+static void init_udp_hash_table(void)
+{
+    if (udp_hash_table) return;  /* Already initialized */
+
+    udp_hash_table = malloc(sizeof(UdpConnectionHashTable));
+    if (!udp_hash_table) {
+        logError("Failed to allocate UDP hash table\n");
+        exit(1);
+    }
+
+    udp_hash_table->bucket_count = UDP_HASH_TABLE_SIZE;
+    udp_hash_table->buckets = calloc(UDP_HASH_TABLE_SIZE, sizeof(ConnectionInfo*));
+    if (!udp_hash_table->buckets) {
+        logError("Failed to allocate UDP hash table buckets\n");
+        exit(1);
+    }
+}
+
+/* Lookup UDP connection in hash table by server and remote address */
+static ConnectionInfo *lookup_udp_connection(ServerInfo const *srv,
+                                             struct sockaddr_storage const *addr)
+{
+    if (!udp_hash_table) return NULL;
+
+    uint32_t hash = hash_udp_connection(srv, addr);
+    ConnectionInfo *conn = udp_hash_table->buckets[hash];
+
+    /* Walk hash bucket chain */
+    while (conn) {
+        if (conn->server == srv &&
+            conn->remote.protocol == IPPROTO_UDP &&
+            sockaddr_equal(&conn->remoteAddress, addr)) {
+            return conn;
+        }
+        conn = conn->hash_next;
+    }
+
+    return NULL;
+}
+
+/* Insert UDP connection into hash table */
+static void hash_insert_udp_connection(ConnectionInfo *conn)
+{
+    if (!udp_hash_table) init_udp_hash_table();
+
+    uint32_t hash = hash_udp_connection(conn->server, &conn->remoteAddress);
+
+    /* Insert at head of bucket chain */
+    conn->hash_next = udp_hash_table->buckets[hash];
+    udp_hash_table->buckets[hash] = conn;
+}
+
+/* Remove UDP connection from hash table */
+static void hash_remove_udp_connection(ConnectionInfo *conn)
+{
+    if (!udp_hash_table) return;
+
+    uint32_t hash = hash_udp_connection(conn->server, &conn->remoteAddress);
+
+    /* Find and remove from bucket chain */
+    ConnectionInfo **pp = &udp_hash_table->buckets[hash];
+    while (*pp && *pp != conn) {
+        pp = &(*pp)->hash_next;
+    }
+    if (*pp) {
+        *pp = conn->hash_next;
+        conn->hash_next = NULL;
+    }
+}
+
+/* Insert at head of LRU list (most recently used) */
+static void lru_insert_head(ServerInfo *srv, ConnectionInfo *conn)
+{
+    conn->lru_prev = NULL;
+    conn->lru_next = srv->udp_lru_head;
+
+    if (srv->udp_lru_head) {
+        srv->udp_lru_head->lru_prev = conn;
+    } else {
+        /* List was empty */
+        srv->udp_lru_tail = conn;
+    }
+
+    srv->udp_lru_head = conn;
+}
+
+/* Remove from LRU list */
+static void lru_remove(ServerInfo *srv, ConnectionInfo *conn)
+{
+    if (conn->lru_prev) {
+        conn->lru_prev->lru_next = conn->lru_next;
+    } else {
+        /* Was at head */
+        srv->udp_lru_head = conn->lru_next;
+    }
+
+    if (conn->lru_next) {
+        conn->lru_next->lru_prev = conn->lru_prev;
+    } else {
+        /* Was at tail */
+        srv->udp_lru_tail = conn->lru_prev;
+    }
+
+    conn->lru_prev = conn->lru_next = NULL;
+}
+
+/* Move to head of LRU list (mark as recently used) */
+static void lru_touch(ServerInfo *srv, ConnectionInfo *conn)
+{
+    if (srv->udp_lru_head == conn) return;  /* Already at head */
+
+    lru_remove(srv, conn);
+    lru_insert_head(srv, conn);
+}
+
+/* Cleanup UDP hash table */
+static void cleanup_udp_hash_table(void)
+{
+    if (!udp_hash_table) return;
+
+    free(udp_hash_table->buckets);
+    free(udp_hash_table);
+    udp_hash_table = NULL;
+}
+
+/* ===== End of UDP Hash Table and LRU Functions ===== */
+
 /* Find and close the oldest UDP connection for a given server (LRU eviction) */
 static void close_oldest_udp_connection(ServerInfo *srv)
 {
-    ConnectionInfo *oldest = NULL;
-    time_t oldest_time = 0;
+    /* O(1) - just get tail of LRU list */
+    ConnectionInfo *oldest = srv->udp_lru_tail;
 
-    /* Find the connection with the oldest (smallest) timeout value */
-    for (ConnectionInfo *c = connectionListHead; c; c = c->next) {
-        if (c->server == srv &&
-            c->remote.protocol == IPPROTO_UDP &&
-            !c->coClosing &&
-            (oldest == NULL || c->remoteTimeout < oldest_time)) {
-            oldest = c;
-            oldest_time = c->remoteTimeout;
-        }
-    }
-
-    if (oldest) {
+    if (oldest && !oldest->coClosing) {
         handleClose(oldest, &oldest->remote, &oldest->local);
     }
 }
@@ -1196,20 +1379,20 @@ static void udp_server_recv_cb(uv_udp_t *handle, ssize_t nread,
     uv_os_fd_t server_fd;
     uv_fileno((uv_handle_t*)handle, &server_fd);
 
-    /* Look for existing connection from this address */
-    ConnectionInfo *cnx = NULL;
-    for (ConnectionInfo *c = connectionListHead; c; c = c->next) {
-        if (c->remote.fd == (SOCKET)server_fd &&
-            c->remote.protocol == IPPROTO_UDP &&
-            sameSocketAddress(&c->remoteAddress,
-                              (struct sockaddr_storage*)addr)) {
-            cnx = c;
-            break;
-        }
-    }
+    /* Convert to sockaddr_storage for hashing */
+    struct sockaddr_storage addr_storage;
+    memcpy(&addr_storage, addr,
+           addr->sa_family == AF_INET ? sizeof(struct sockaddr_in) :
+                                         sizeof(struct sockaddr_in6));
+
+    /* O(1) hash lookup instead of O(n) list scan */
+    ConnectionInfo *cnx = lookup_udp_connection(srv, &addr_storage);
 
     if (cnx) {
-        /* Existing connection: refresh timeout */
+        /* Existing connection - mark as recently used */
+        lru_touch(srv, cnx);
+
+        /* Refresh timeout */
         cnx->remoteTimeout = time(NULL) + srv->serverTimeout;
         uv_timer_again(&cnx->timeout_timer);
 
@@ -1312,6 +1495,10 @@ static void udp_server_recv_cb(uv_udp_t *handle, ssize_t nread,
 
     logEvent(cnx, srv, logOpened);
 
+    /* Add to both hash table and LRU list */
+    hash_insert_udp_connection(cnx);
+    lru_insert_head(srv, cnx);
+
     /* Increment UDP connection count for this forwarding rule */
     ((ServerInfo*)srv)->udp_connection_count++;
 }
@@ -1327,9 +1514,19 @@ static void handleClose(ConnectionInfo *cnx, Socket *socket, Socket *other_socke
         logEvent(cnx, cnx->server, cnx->coLog);
         cnx->coClosing = 1;
 
-        /* Decrement UDP connection count for this forwarding rule */
+        /* Cleanup UDP connection: remove from hash table and LRU list */
         if (cnx->remote.protocol == IPPROTO_UDP && cnx->server) {
-            ((ServerInfo*)cnx->server)->udp_connection_count--;
+            /* Remove from hash table */
+            hash_remove_udp_connection(cnx);
+
+            /* Remove from LRU list */
+            ServerInfo *srv = (ServerInfo*)cnx->server;
+            lru_remove(srv, cnx);
+
+            /* Decrement counter */
+            if (srv->udp_connection_count > 0) {
+                srv->udp_connection_count--;
+            }
         }
     }
 
