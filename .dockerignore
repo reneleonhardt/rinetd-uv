@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+*.o
+*.a
+src/rinetd-uv
+autom4te.cache/
+.auto/
+config.log
+config.status
+Makefile
+src/Makefile
+.deps/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation build artifacts
+*.html
+*.8
+
+# Test files
+test/
+*.log
+*.pid
+
+# Other
+.dockerignore
+Dockerfile
+*.md
+!README.md

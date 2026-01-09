@@ -121,6 +121,8 @@ AND DENY RULES</a></li>
 id="toc-example-configuration">EXAMPLE CONFIGURATION</a></li>
 <li><a href="#reinitializing-rinetd-uv"
 id="toc-reinitializing-rinetd-uv">REINITIALIZING RINETD-UV</a></li>
+<li><a href="#run-with-docker" id="toc-run-with-docker">RUN WITH
+DOCKER</a></li>
 <li><a href="#bugs-and-limitations" id="toc-bugs-and-limitations">BUGS
 AND LIMITATIONS</a></li>
 <li><a href="#performance-notes" id="toc-performance-notes">PERFORMANCE
@@ -531,6 +533,17 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href=
 <p>Or simply:</p>
 <div class="sourceCode" id="cb28"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
+<h2 id="run-with-docker">RUN WITH DOCKER</h2>
+<p>There’s simple <code>Dockerfile</code> provided to create working
+docker image with <strong>rinetd-uv</strong> built from sources (HEAD).
+Image is based on Debian Linux. Thanks to using <code>-slim</code> base
+image and 2-stage build final image size shouldn’t exceed 100MB.</p>
+<p>Build the image:</p>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> build <span class="at">-t</span> rinetd-uv .</span></code></pre></div>
+<p>Example run:</p>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">-d</span> <span class="at">--name</span> rinetd-uv <span class="at">--user</span> nobody <span class="at">--ulimit</span> nofile=65000 <span class="at">--publish</span> 8080:8080 <span class="at">--publish</span> 5353:5353/udp <span class="at">--volume</span> ./rinetd-uv.conf:/etc/rinetd-uv.conf:ro rinetd-uv</span></code></pre></div>
 <h2 id="bugs-and-limitations">BUGS AND LIMITATIONS</h2>
 <p><strong>rinetd-uv</strong> only redirects protocols which use a
 single TCP or UDP socket. This rules out FTP (which uses multiple

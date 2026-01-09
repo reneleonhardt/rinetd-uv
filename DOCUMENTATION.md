@@ -426,6 +426,22 @@ Or simply:
 killall -HUP rinetd-uv
 ```
 
+## RUN WITH DOCKER
+
+There's simple `Dockerfile` provided to create working docker image with **rinetd-uv** built from sources (HEAD). Image is based on Debian Linux. Thanks to using `-slim` base image and 2-stage build final image size shouldn't exceed 100MB.
+
+Build the image:
+
+```bash
+docker build -t rinetd-uv .
+```
+
+Example run:
+
+```bash
+docker run -d --name rinetd-uv --user nobody --ulimit nofile=65000 --publish 8080:8080 --publish 5353:5353/udp --volume ./rinetd-uv.conf:/etc/rinetd-uv.conf:ro rinetd-uv
+```
+
 ## BUGS AND LIMITATIONS
 
 **rinetd-uv** only redirects protocols which use a single TCP or UDP socket. This rules out FTP (which uses multiple connections for data transfer).
