@@ -121,6 +121,63 @@ TCP keepalive is enabled by default for all TCP connections to detect dead conne
 
 When enabled, keepalive probes are sent after 60 seconds of inactivity.
 
+### DNS Refresh Option
+
+For forwarding rules with backend hostnames (not IP addresses), **rinetd-uv** can automatically re-resolve DNS hostnames at configurable intervals. This ensures that if a backend's IP address changes, new connections will use the updated address.
+
+**Global configuration:**
+
+```
+dns-refresh 600
+```
+
+This sets the default DNS refresh interval to 600 seconds (10 minutes) for all forwarding rules with hostnames.
+
+**Per-rule configuration:**
+
+```
+0.0.0.0 8080/tcp backend.example.com 80 [dns-refresh=300]
+```
+
+This overrides the global setting, refreshing this specific backend every 300 seconds (5 minutes).
+
+**Disable for specific rule:**
+
+```
+0.0.0.0 8081/tcp backend2.example.com 80 [dns-refresh=0]
+```
+
+Setting `dns-refresh=0` disables periodic DNS refresh for this rule.
+
+**Behavior:**
+
+- **Hostname detection:** DNS refresh is only enabled for backend (target) hostnames. Rules with IP addresses (IPv4 or IPv6) automatically skip DNS refresh.
+- **Existing connections:** Continue using the old IP address until they close naturally.
+- **New connections:** Immediately use the newly resolved IP address.
+- **Failure-triggered refresh:** After 3 consecutive connection failures to a backend, DNS is re-resolved immediately (regardless of the timer interval).
+- **SIGHUP compatibility:** Sending SIGHUP still forces immediate re-resolution of all hostnames (existing behavior preserved).
+
+**Default:** 600 seconds (10 minutes)
+
+**Example configuration:**
+
+```
+# Global default: refresh every 10 minutes
+dns-refresh 600
+
+# Critical service: refresh more frequently
+0.0.0.0 443/tcp api.example.com 443 [dns-refresh=60]
+
+# Static IP backend: no DNS refresh needed
+0.0.0.0 8080/tcp 192.168.1.100 8080
+
+# Long-lived connections: refresh less frequently
+0.0.0.0 8000/tcp cache.example.com 6379 [dns-refresh=1800]
+
+# Disable for this specific rule
+0.0.0.0 9000/tcp static.example.com 9000 [dns-refresh=0]
+```
+
 ## GLOBAL CONFIGURATION OPTIONS
 
 ### Buffer Size
@@ -144,6 +201,18 @@ The buffer size multiplied by the number of concurrent connections determines to
 - `buffersize 4096`: ~4 MB memory
 - `buffersize 65536`: ~64 MB memory
 
+### DNS Refresh
+
+The global DNS refresh interval can be configured to set the default for all forwarding rules with backend hostnames:
+
+```
+dns-refresh 600
+```
+
+**Range:** 0 to unlimited seconds
+**Default:** 600 seconds (10 minutes)
+
+This global setting applies to all forwarding rules unless overridden by a per-rule `[dns-refresh=N]` option. See the **DNS Refresh Option** section under **FORWARDING OPTIONS** for detailed documentation and examples.
 
 ### Logging
 
@@ -301,6 +370,11 @@ pidfile /var/run/rinetd-uv.pid
 # Smaller values reduce memory usage and latency, larger values improve throughput
 buffersize 65536  # 64KB is the default
 
+# DNS refresh interval (default: 600 seconds = 10 minutes)
+# Automatically re-resolves backend hostnames at specified intervals
+# Set to 0 to disable, or override per-rule with [dns-refresh=N]
+dns-refresh 600
+
 # Global Access Control:
 # You may specify global allow and deny rules here.
 # Only ip addresses are matched, hostnames cannot be specified here.
@@ -323,6 +397,7 @@ include /etc/rinetd-uv.d/*.conf
 # TCP forwarding examples
 0.0.0.0 80/tcp 192.168.1.10 8080/tcp
 192.168.0.1 https server.example.com 8443 [src=192.168.1.1]
+0.0.0.0 444 api.example.com 444 [dns-refresh=60]
 :: http ipv6.google.com http
 
 # UDP forwarding example

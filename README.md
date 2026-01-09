@@ -17,6 +17,7 @@ This program efficiently redirects (proxy) TCP and UDP connections from one IP a
 - Both TCP and UDP support
 - IPv4 and IPv6 support
 - Allow/deny rules for access control
+- Periodic DNS refresh for dynamic backend addresses
 
 ## Documentation
 

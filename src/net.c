@@ -11,7 +11,11 @@
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
 #include "net.h"
+#include "rinetd.h"
 
 int getAddrInfoWithProto(char *address, char *port, int protocol, struct addrinfo **ai)
 {
@@ -62,4 +66,160 @@ uint16_t getPort(struct addrinfo* ai) {
         default:
             return 0;
     }
+}
+
+/* Compare two addrinfo structures - returns 1 if addresses match, 0 otherwise */
+int compareAddrinfo(struct addrinfo *a, struct addrinfo *b)
+{
+    /* Compare first address only (rinetd uses first result) */
+    if (!a || !b) return 0;
+    if (a->ai_family != b->ai_family || a->ai_protocol != b->ai_protocol) return 0;
+
+    if (a->ai_family == AF_INET) {
+        struct sockaddr_in *a4 = (struct sockaddr_in *)a->ai_addr;
+        struct sockaddr_in *b4 = (struct sockaddr_in *)b->ai_addr;
+        return a4->sin_addr.s_addr == b4->sin_addr.s_addr &&
+               a4->sin_port == b4->sin_port;
+    } else if (a->ai_family == AF_INET6) {
+        struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)a->ai_addr;
+        struct sockaddr_in6 *b6 = (struct sockaddr_in6 *)b->ai_addr;
+        return memcmp(&a6->sin6_addr, &b6->sin6_addr, 16) == 0 &&
+               a6->sin6_port == b6->sin6_port;
+    }
+    return 0;
+}
+
+/* Callback for async DNS resolution */
+void dns_refresh_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res)
+{
+    ServerInfo *srv = (ServerInfo *)req->data;
+    free(req);
+    srv->dns_req = NULL;
+
+    if (status < 0) {
+        logError("DNS refresh failed for %s: %s\n", srv->toHost, uv_strerror(status));
+        return;  /* Keep using old address */
+    }
+
+    /* Compare addresses */
+    if (!compareAddrinfo(res, srv->toAddrInfo)) {
+        /* Address changed - log and update */
+        char old_addr[INET6_ADDRSTRLEN], new_addr[INET6_ADDRSTRLEN];
+
+        /* Format old address */
+        if (srv->toAddrInfo->ai_family == AF_INET) {
+            inet_ntop(AF_INET, &((struct sockaddr_in *)srv->toAddrInfo->ai_addr)->sin_addr,
+                     old_addr, sizeof(old_addr));
+        } else {
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)srv->toAddrInfo->ai_addr)->sin6_addr,
+                     old_addr, sizeof(old_addr));
+        }
+
+        /* Format new address */
+        if (res->ai_family == AF_INET) {
+            inet_ntop(AF_INET, &((struct sockaddr_in *)res->ai_addr)->sin_addr,
+                     new_addr, sizeof(new_addr));
+        } else {
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)res->ai_addr)->sin6_addr,
+                     new_addr, sizeof(new_addr));
+        }
+
+        logInfo("DNS refresh: %s resolved to new address %s (was %s)\n",
+                srv->toHost, new_addr, old_addr);
+
+        freeaddrinfo(srv->toAddrInfo);
+        srv->toAddrInfo = res;
+        srv->consecutive_failures = 0;
+    } else {
+        /* Address unchanged */
+        uv_freeaddrinfo(res);
+    }
+}
+
+/* Check if a string is an IP address (IPv4 or IPv6) */
+static int isIpAddress(const char *str)
+{
+    struct in_addr addr4;
+    struct in6_addr addr6;
+
+    /* Try parsing as IPv4 */
+    if (inet_pton(AF_INET, str, &addr4) == 1) {
+        return 1;
+    }
+
+    /* Try parsing as IPv6 (with or without brackets) */
+    if (inet_pton(AF_INET6, str, &addr6) == 1) {
+        return 1;
+    }
+
+    /* Remove brackets and try again for IPv6 */
+    if (str[0] == '[') {
+        size_t len = strlen(str);
+        if (len > 2 && str[len-1] == ']') {
+            char *stripped = malloc(len - 1);
+            if (stripped) {
+                memcpy(stripped, str + 1, len - 2);
+                stripped[len - 2] = '\0';
+                int result = inet_pton(AF_INET6, stripped, &addr6);
+                free(stripped);
+                if (result == 1) {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return 0;  /* Not an IP address */
+}
+
+/* Check if DNS refresh should be enabled for a server */
+int shouldEnableDnsRefresh(ServerInfo *srv)
+{
+    /* Don't enable DNS refresh if period is 0 or negative */
+    if (srv->dns_refresh_period <= 0) {
+        return 0;
+    }
+
+    /* Don't enable DNS refresh if destination is already an IP address */
+    if (isIpAddress(srv->toHost)) {
+        return 0;
+    }
+
+    /* Enable DNS refresh for hostnames */
+    return 1;
+}
+
+/* Start async DNS resolution for a server */
+int startAsyncDnsResolution(ServerInfo *srv)
+{
+    if (srv->dns_req != NULL) {
+        logInfo("DNS refresh already in progress for %s\n", srv->toHost);
+        return 0;
+    }
+
+    uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
+    if (!req) {
+        logError("malloc failed for DNS refresh request\n");
+        return -1;
+    }
+
+    req->data = srv;
+    srv->dns_req = req;
+
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_protocol = srv->toProtocol_saved,
+        .ai_socktype = srv->toProtocol_saved == IPPROTO_UDP ? SOCK_DGRAM : SOCK_STREAM,
+        .ai_flags = AI_PASSIVE,
+    };
+
+    int ret = uv_getaddrinfo(main_loop, req, dns_refresh_cb,
+                             srv->toHost_saved, srv->toPort_saved, &hints);
+    if (ret != 0) {
+        logError("uv_getaddrinfo failed for %s: %s\n", srv->toHost, uv_strerror(ret));
+        free(req);
+        srv->dns_req = NULL;
+        return -1;
+    }
+    return 0;
 }

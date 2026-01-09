@@ -10,13 +10,16 @@
 #pragma once
 
 #include <stdint.h>
+#include <uv.h>
 
 /* Constants */
 
 static int const RINETD_DEFAULT_BUFFER_SIZE = 65536;
 static int const RINETD_LISTEN_BACKLOG = 128;
 static int const RINETD_DEFAULT_UDP_TIMEOUT = 10;
+static int const RINETD_DEFAULT_DNS_REFRESH_PERIOD = 600;
 static int const RINETD_MAX_UDP_CONNECTIONS = 5000;
+static int const RINETD_DNS_REFRESH_FAILURE_THRESHOLD = 3;
 
 #define RINETD_CONFIG_FILE "/etc/rinetd-uv.conf"
 #define RINETD_PID_FILE "/var/run/rinetd-uv.pid"
@@ -36,6 +39,10 @@ extern char *pidLogFileName;
 extern int logFormatCommon;
 extern FILE *logFile;
 extern int bufferSize;
+extern int globalDnsRefreshPeriod;
+
+/* libuv event loop */
+extern uv_loop_t *main_loop;
 
 /* Functions */
 
@@ -44,4 +51,4 @@ void logInfo(char const *fmt, ...);
 void addServer(char *bindAddress, char *bindPort, int bindProtocol,
                char *connectAddress, char *connectPort, int connectProtocol,
                int serverTimeout, char *sourceAddress,
-               int keepalive);
+               int keepalive, int dns_refresh_period);

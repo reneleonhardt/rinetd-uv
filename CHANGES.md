@@ -1,4 +1,4 @@
-## Version 2.0 (2026/01/07)
+## Version 2.0 (2026/01/09)
 
 **Major rewrite as rinetd-uv**
 
@@ -23,6 +23,15 @@
    - Prevents "too many open files" errors under high UDP load
    - Maintains RFC 5452 compliance (source port randomization for DNS security)
  * **TCP keepalive:** Enabled by default for TCP connections, configurable per-rule with `keepalive=on/off` option
+ * **Forced and Periodic DNS refresh:**
+   - SIGHUP reload forces immediate re-resolution
+   - Automatic re-resolution of backend hostnames at configurable intervals
+   - Default interval: 600 seconds (10 minutes), configurable globally or per-rule
+   - Uses async DNS resolution (libuv) to avoid blocking event loop
+   - Address change logging with old/new IP tracking
+   - Failure-triggered refresh: re-resolves after 3 consecutive connection failures
+   - Configuration: `dns-refresh 600` (global) or `[dns-refresh=300]` (per-rule)
+   - Set to 0 to disable for specific rules: `[dns-refresh=0]`
  * **INCOMPATIBILITY** Renamed configuration option: `pidlogfile` → `pidfile`
  * **INCOMPATIBILITY** Changed date format in log file
 

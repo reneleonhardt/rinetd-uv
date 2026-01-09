@@ -66,7 +66,7 @@ typedef struct {
 static UdpConnectionHashTable *udp_hash_table = NULL;
 
 /* libuv event loop */
-static uv_loop_t *main_loop = NULL;
+uv_loop_t *main_loop = NULL;
 static int should_exit = 0;  /* Flag to signal graceful shutdown */
 
 /* libuv signal handlers */
@@ -77,6 +77,7 @@ char *pidLogFileName = NULL;
 int logFormatCommon = 0;
 FILE *logFile = NULL;
 int bufferSize = RINETD_DEFAULT_BUFFER_SIZE;
+int globalDnsRefreshPeriod = RINETD_DEFAULT_DNS_REFRESH_PERIOD;
 
 char const *logMessages[] = {
     "unknown-error",
@@ -139,8 +140,11 @@ static RETSIGTYPE quit(int s);
 
 /* libuv functions */
 static void signal_cb(uv_signal_t *handle, int signum);
+static void dns_refresh_timer_cb(uv_timer_t *timer);
 static void startServerListening(ServerInfo *srv);
 static void server_handle_close_cb(uv_handle_t *handle);
+static void dns_timer_close_cb(uv_handle_t *handle);
+static void check_all_servers_closed(void);
 
 
 int main(int argc, char *argv[])
@@ -365,7 +369,7 @@ static void readConfiguration(char const *file) {
 void addServer(char *bindAddress, char *bindPort, int bindProtocol,
                char *connectAddress, char *connectPort, int connectProtocol,
                int serverTimeout, char *sourceAddress,
-               int keepalive)
+               int keepalive, int dns_refresh_period)
 {
     ServerInfo si = {
         .fromHost = strdup(bindAddress),
@@ -373,6 +377,14 @@ void addServer(char *bindAddress, char *bindPort, int bindProtocol,
         .serverTimeout = serverTimeout,
         .fd = INVALID_SOCKET,
         .keepalive = keepalive,
+        .dns_refresh_period = dns_refresh_period,
+        .dns_timer_initialized = 0,
+        .dns_timer_closing = 0,
+        .consecutive_failures = 0,
+        .dns_req = NULL,
+        .toHost_saved = strdup(connectAddress),
+        .toPort_saved = strdup(connectPort),
+        .toProtocol_saved = connectProtocol,
     };
 
     /* Resolve bind address */
@@ -481,6 +493,16 @@ static void signal_cb(uv_signal_t *handle, int signum)
     }
 }
 
+/* DNS refresh timer callback */
+static void dns_refresh_timer_cb(uv_timer_t *timer)
+{
+    ServerInfo *srv = (ServerInfo *)timer->data;
+    logInfo("Periodic DNS refresh for %s:%d -> %s (interval: %ds)\n",
+            srv->fromHost, getPort(srv->fromAddrInfo),
+            srv->toHost, srv->dns_refresh_period);
+    startAsyncDnsResolution(srv);
+}
+
 /* Initialize and start libuv event handling for a server */
 static void startServerListening(ServerInfo *srv)
 {
@@ -552,48 +574,46 @@ static void startServerListening(ServerInfo *srv)
     }
 
     srv->handle_initialized = 1;
+
+    /* Initialize DNS refresh timer if enabled and destination is a hostname */
+    if (shouldEnableDnsRefresh(srv) && !srv->dns_timer_initialized) {
+        int ret = uv_timer_init(main_loop, &srv->dns_refresh_timer);
+        if (ret == 0) {
+            srv->dns_refresh_timer.data = srv;
+            srv->dns_timer_initialized = 1;
+            ret = uv_timer_start(&srv->dns_refresh_timer, dns_refresh_timer_cb,
+                                srv->dns_refresh_period * 1000,
+                                srv->dns_refresh_period * 1000);
+            if (ret != 0) {
+                logError("uv_timer_start() failed for DNS refresh: %s\n", uv_strerror(ret));
+                uv_close((uv_handle_t*)&srv->dns_refresh_timer, NULL);
+                srv->dns_timer_initialized = 0;
+            } else {
+                logInfo("DNS refresh enabled for %s -> %s (interval: %ds)\n",
+                        srv->fromHost, srv->toHost, srv->dns_refresh_period);
+            }
+        } else {
+            logError("uv_timer_init() failed for DNS refresh: %s\n", uv_strerror(ret));
+        }
+    }
 }
 
-/* Server handle close callback - frees server resources */
-static void server_handle_close_cb(uv_handle_t *handle)
+/* Check if all server handles and DNS timers are closed - if so, free seInfo and reload */
+static void check_all_servers_closed(void)
 {
-    if (!handle || !handle->data) {
-        return;
-    }
-
-    ServerInfo *srv = (ServerInfo*)handle->data;
-
-    /* Mark handle as no longer initialized */
-    srv->handle_initialized = 0;
-
-    /* libuv has already closed the socket, just clear the fd */
-    srv->fd = INVALID_SOCKET;
-
-    /* Free server resources */
-    free(srv->fromHost);
-    srv->fromHost = NULL;
-    free(srv->toHost);
-    srv->toHost = NULL;
-    freeaddrinfo(srv->fromAddrInfo);
-    srv->fromAddrInfo = NULL;
-    freeaddrinfo(srv->toAddrInfo);
-    srv->toAddrInfo = NULL;
-    if (srv->sourceAddrInfo) {
-        freeaddrinfo(srv->sourceAddrInfo);
-        srv->sourceAddrInfo = NULL;
-    }
-
-    /* Check if all server handles are closed - if so, free seInfo */
-    /* Note: This is called for each handle, so we need to check if all are done */
     if (!seInfo) {
         return;  /* Already freed */
     }
 
     int all_closed = 1;
     for (int i = 0; i < seTotal; ++i) {
-        /* If handle_initialized is 0, the close callback has fired and we're done.
-           We don't check uv_is_closing() because it returns true DURING the callback. */
+        /* Check if server handle is still open or closing */
         if (seInfo[i].handle_initialized) {
+            all_closed = 0;
+            break;
+        }
+        /* Check if DNS timer is still closing */
+        if (seInfo[i].dns_timer_closing) {
             all_closed = 0;
             break;
         }
@@ -617,6 +637,73 @@ static void server_handle_close_cb(uv_handle_t *handle)
     }
 }
 
+/* DNS timer close callback - called when DNS timer is fully closed */
+static void dns_timer_close_cb(uv_handle_t *handle)
+{
+    if (!handle || !handle->data) {
+        return;
+    }
+
+    ServerInfo *srv = (ServerInfo*)handle->data;
+    srv->dns_timer_initialized = 0;
+    srv->dns_timer_closing = 0;
+
+    /* Check if we can now free seInfo */
+    check_all_servers_closed();
+}
+
+/* Server handle close callback - frees server resources */
+static void server_handle_close_cb(uv_handle_t *handle)
+{
+    if (!handle || !handle->data) {
+        return;
+    }
+
+    ServerInfo *srv = (ServerInfo*)handle->data;
+
+    /* Mark handle as no longer initialized */
+    srv->handle_initialized = 0;
+
+    /* libuv has already closed the socket, just clear the fd */
+    srv->fd = INVALID_SOCKET;
+
+    /* Stop and close DNS refresh timer (async - callback will check for seInfo free) */
+    if (srv->dns_timer_initialized && !srv->dns_timer_closing) {
+        uv_timer_stop(&srv->dns_refresh_timer);
+        srv->dns_timer_closing = 1;
+        uv_close((uv_handle_t*)&srv->dns_refresh_timer, dns_timer_close_cb);
+    }
+
+    /* Cancel pending DNS request */
+    if (srv->dns_req != NULL) {
+        uv_cancel((uv_req_t*)srv->dns_req);
+        srv->dns_req = NULL;
+    }
+
+    /* Free saved DNS data */
+    free(srv->toHost_saved);
+    srv->toHost_saved = NULL;
+    free(srv->toPort_saved);
+    srv->toPort_saved = NULL;
+
+    /* Free server resources */
+    free(srv->fromHost);
+    srv->fromHost = NULL;
+    free(srv->toHost);
+    srv->toHost = NULL;
+    freeaddrinfo(srv->fromAddrInfo);
+    srv->fromAddrInfo = NULL;
+    freeaddrinfo(srv->toAddrInfo);
+    srv->toAddrInfo = NULL;
+    if (srv->sourceAddrInfo) {
+        freeaddrinfo(srv->sourceAddrInfo);
+        srv->sourceAddrInfo = NULL;
+    }
+
+    /* Check if all server handles and DNS timers are closed */
+    check_all_servers_closed();
+}
+
 /* Forward declarations for connection handling */
 static void handle_close_cb(uv_handle_t *handle);
 static void tcp_read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
@@ -630,6 +717,19 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
     if (status < 0) {
         logError("connect error: %s\n", uv_strerror(status));
         logEvent(cnx, cnx->server, logLocalConnectFailed);
+
+        /* Track failures and trigger DNS refresh if threshold reached */
+        if (cnx->server) {
+            ServerInfo *srv = (ServerInfo *)cnx->server;
+            srv->consecutive_failures++;
+            if (srv->consecutive_failures >= RINETD_DNS_REFRESH_FAILURE_THRESHOLD &&
+                shouldEnableDnsRefresh(srv)) {
+                logInfo("Backend failures (%d) reached threshold for %s, triggering DNS refresh\n",
+                        srv->consecutive_failures, srv->toHost);
+                startAsyncDnsResolution(srv);
+            }
+        }
+
         /* Close local handle that was initialized but failed to connect */
         cnx->local_handle_closing = 1;  /* Set BEFORE uv_close() */
         uv_close((uv_handle_t*)&cnx->local_uv_handle.tcp, handle_close_cb);
@@ -679,6 +779,11 @@ static void tcp_connect_cb(uv_connect_t *req, int status)
     }
 
     logEvent(cnx, cnx->server, logOpened);
+
+    /* Reset failure counter on successful connection */
+    if (cnx->server) {
+        ((ServerInfo *)cnx->server)->consecutive_failures = 0;
+    }
 }
 
 /* TCP server accept callback */
@@ -1127,6 +1232,23 @@ static void udp_send_cb(uv_udp_send_t *req, int status)
     if (status < 0) {
         logError("UDP send error: %s\n", uv_strerror(status));
         /* For UDP, we don't close on send errors - just log */
+
+        /* Track backend failures and trigger DNS refresh if threshold reached */
+        if (sreq->is_to_backend && cnx->server) {
+            ServerInfo *srv = (ServerInfo *)cnx->server;
+            srv->consecutive_failures++;
+            if (srv->consecutive_failures >= RINETD_DNS_REFRESH_FAILURE_THRESHOLD &&
+                shouldEnableDnsRefresh(srv)) {
+                logInfo("UDP backend failures (%d) reached threshold for %s, triggering DNS refresh\n",
+                        srv->consecutive_failures, srv->toHost);
+                startAsyncDnsResolution(srv);
+            }
+        }
+    } else {
+        /* Reset failure counter on successful backend send */
+        if (sreq->is_to_backend && cnx->server) {
+            ((ServerInfo *)cnx->server)->consecutive_failures = 0;
+        }
     }
 
     /* Free the send request */

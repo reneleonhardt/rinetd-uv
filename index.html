@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2026-01-08" />
+  <meta name="dcterms.date" content="2026-01-09" />
   <title>rinetd-uv - internet redirection server</title>
   <style>
     code{white-space: pre-wrap;}
@@ -93,7 +93,7 @@
 <body>
 <header id="title-block-header">
 <h1 class="title">rinetd-uv - internet redirection server</h1>
-<p class="date">2026-01-08</p>
+<p class="date">2026-01-09</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -251,6 +251,55 @@ dead connections. To disable it for a specific forwarding rule, use the
 <pre><code>192.168.1.1 80/tcp  10.1.1.127 80/tcp  [keepalive=off]</code></pre>
 <p>When enabled, keepalive probes are sent after 60 seconds of
 inactivity.</p>
+<h3 id="dns-refresh-option">DNS Refresh Option</h3>
+<p>For forwarding rules with backend hostnames (not IP addresses),
+<strong>rinetd-uv</strong> can automatically re-resolve DNS hostnames at
+configurable intervals. This ensures that if a backend’s IP address
+changes, new connections will use the updated address.</p>
+<p><strong>Global configuration:</strong></p>
+<pre><code>dns-refresh 600</code></pre>
+<p>This sets the default DNS refresh interval to 600 seconds (10
+minutes) for all forwarding rules with hostnames.</p>
+<p><strong>Per-rule configuration:</strong></p>
+<pre><code>0.0.0.0 8080/tcp backend.example.com 80 [dns-refresh=300]</code></pre>
+<p>This overrides the global setting, refreshing this specific backend
+every 300 seconds (5 minutes).</p>
+<p><strong>Disable for specific rule:</strong></p>
+<pre><code>0.0.0.0 8081/tcp backend2.example.com 80 [dns-refresh=0]</code></pre>
+<p>Setting <code>dns-refresh=0</code> disables periodic DNS refresh for
+this rule.</p>
+<p><strong>Behavior:</strong></p>
+<ul>
+<li><strong>Hostname detection:</strong> DNS refresh is only enabled for
+backend (target) hostnames. Rules with IP addresses (IPv4 or IPv6)
+automatically skip DNS refresh.</li>
+<li><strong>Existing connections:</strong> Continue using the old IP
+address until they close naturally.</li>
+<li><strong>New connections:</strong> Immediately use the newly resolved
+IP address.</li>
+<li><strong>Failure-triggered refresh:</strong> After 3 consecutive
+connection failures to a backend, DNS is re-resolved immediately
+(regardless of the timer interval).</li>
+<li><strong>SIGHUP compatibility:</strong> Sending SIGHUP still forces
+immediate re-resolution of all hostnames (existing behavior
+preserved).</li>
+</ul>
+<p><strong>Default:</strong> 600 seconds (10 minutes)</p>
+<p><strong>Example configuration:</strong></p>
+<pre><code># Global default: refresh every 10 minutes
+dns-refresh 600
+
+# Critical service: refresh more frequently
+0.0.0.0 443/tcp api.example.com 443 [dns-refresh=60]
+
+# Static IP backend: no DNS refresh needed
+0.0.0.0 8080/tcp 192.168.1.100 8080
+
+# Long-lived connections: refresh less frequently
+0.0.0.0 8000/tcp cache.example.com 6379 [dns-refresh=1800]
+
+# Disable for this specific rule
+0.0.0.0 9000/tcp static.example.com 9000 [dns-refresh=0]</code></pre>
 <h2 id="global-configuration-options">GLOBAL CONFIGURATION OPTIONS</h2>
 <h3 id="buffer-size">Buffer Size</h3>
 <p>The buffer size used for I/O operations can be configured globally.
@@ -270,6 +319,16 @@ size</p>
 determines total memory usage. For example, with 1000 concurrent
 connections: - <code>buffersize 4096</code>: ~4 MB memory -
 <code>buffersize 65536</code>: ~64 MB memory</p>
+<h3 id="dns-refresh">DNS Refresh</h3>
+<p>The global DNS refresh interval can be configured to set the default
+for all forwarding rules with backend hostnames:</p>
+<pre><code>dns-refresh 600</code></pre>
+<p><strong>Range:</strong> 0 to unlimited seconds
+<strong>Default:</strong> 600 seconds (10 minutes)</p>
+<p>This global setting applies to all forwarding rules unless overridden
+by a per-rule <code>[dns-refresh=N]</code> option. See the <strong>DNS
+Refresh Option</strong> section under <strong>FORWARDING
+OPTIONS</strong> for detailed documentation and examples.</p>
 <h3 id="logging">Logging</h3>
 <p><strong>rinetd-uv</strong> is able to produce a log file in either of
 two formats: tab-delimited and web server-style “common log format”.</p>
@@ -420,6 +479,11 @@ pidfile /var/run/rinetd-uv.pid
 # Smaller values reduce memory usage and latency, larger values improve throughput
 buffersize 65536  # 64KB is the default
 
+# DNS refresh interval (default: 600 seconds = 10 minutes)
+# Automatically re-resolves backend hostnames at specified intervals
+# Set to 0 to disable, or override per-rule with [dns-refresh=N]
+dns-refresh 600
+
 # Global Access Control:
 # You may specify global allow and deny rules here.
 # Only ip addresses are matched, hostnames cannot be specified here.
@@ -443,6 +507,7 @@ include /etc/rinetd-uv.d/*.conf
 0.0.0.0 80/tcp 192.168.1.10 8080/tcp
 192.168.0.1 https server.example.com 8443 [src=192.168.1.1]
 :: http ipv6.google.com http
+0.0.0.0 444 api.example.com 444 [dns-refresh=60]
 
 # UDP forwarding example
 0.0.0.0 53/udp 8.8.8.8 53/udp [timeout=30]
@@ -455,11 +520,11 @@ allow 10.0.0.*
 <p>The SIGHUP signal can be used to cause <strong>rinetd-uv</strong> to
 reload its configuration file without interrupting existing
 connections.</p>
-<div class="sourceCode" id="cb22"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd-uv.pid<span class="va">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="bu">kill</span> <span class="at">-HUP</span> <span class="va">$(</span><span class="fu">cat</span> /var/run/rinetd-uv.pid<span class="va">)</span></span></code></pre></div>
 <p>Or simply:</p>
-<div class="sourceCode" id="cb23"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">killall</span> <span class="at">-HUP</span> rinetd-uv</span></code></pre></div>
 <h2 id="bugs-and-limitations">BUGS AND LIMITATIONS</h2>
 <p><strong>rinetd-uv</strong> only redirects protocols which use a
 single TCP or UDP socket. This rules out FTP (which uses multiple

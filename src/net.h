@@ -84,6 +84,15 @@ static inline int GetLastError(void) {
 }
 #endif /* _WIN32 */
 
+#include <uv.h>
+#include "types.h"
+
 int sameSocketAddress(struct sockaddr_storage *a, struct sockaddr_storage *b);
 int getAddrInfoWithProto(char *address, char *port, int protocol, struct addrinfo **ai);
 uint16_t getPort(struct addrinfo* ai);
+
+/* Async DNS refresh functions */
+int compareAddrinfo(struct addrinfo *a, struct addrinfo *b);
+void dns_refresh_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res);
+int shouldEnableDnsRefresh(ServerInfo *srv);
+int startAsyncDnsResolution(ServerInfo *srv);

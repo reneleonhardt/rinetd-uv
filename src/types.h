@@ -61,6 +61,17 @@ struct _server_info {
     ConnectionInfo *udp_lru_tail;   /* Least recently used (back) - evict this */
     /* TCP keepalive: 1 = enabled (default), 0 = disabled */
     int keepalive;
+
+    /* DNS refresh timer and state */
+    uv_timer_t dns_refresh_timer;        /* Periodic refresh timer */
+    int dns_refresh_period;               /* Seconds between refreshes (0 = disabled) */
+    int dns_timer_initialized;            /* Track if timer created */
+    int dns_timer_closing;                /* Track if timer close in progress */
+    int consecutive_failures;             /* Backend connection failure counter */
+    uv_getaddrinfo_t *dns_req;            /* Pending async DNS request */
+    char *toHost_saved;                   /* Hostname for async resolution */
+    char *toPort_saved;                   /* Port for async resolution */
+    int toProtocol_saved;                 /* Protocol for async resolution */
 };
 
 typedef struct _socket Socket;
