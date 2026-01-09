@@ -391,7 +391,7 @@ include /etc/rinetd-uv.d/*.conf
 
 # Forwarding options:
 # Format: bindaddress bindport connectaddress connectport [options]
-# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off]
+# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off,dns-refresh=seconds]
 # Note: TCP keepalive is enabled by default
 
 # TCP forwarding examples

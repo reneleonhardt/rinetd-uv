@@ -492,14 +492,14 @@ include /etc/rinetd\-uv.d/*.conf
 
 # Forwarding options:
 # Format: bindaddress bindport connectaddress connectport [options]
-# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off]
+# Options: [timeout=seconds,src=sourceaddress,keepalive=on/off,dns\-refresh=seconds]
 # Note: TCP keepalive is enabled by default
 
 # TCP forwarding examples
 0.0.0.0 80/tcp 192.168.1.10 8080/tcp
 192.168.0.1 https server.example.com 8443 [src=192.168.1.1]
-:: http ipv6.google.com http
 0.0.0.0 444 api.example.com 444 [dns\-refresh=60]
+:: http ipv6.google.com http
 
 # UDP forwarding example
 0.0.0.0 53/udp 8.8.8.8 53/udp [timeout=30]
