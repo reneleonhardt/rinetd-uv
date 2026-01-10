@@ -39,11 +39,11 @@ RUN git clone --depth 1 https://github.com/marcin-gryszkalis/rinetd-uv.git . \
 FROM debian:trixie-slim
 
 # Install runtime dependencies only
+# netbase provides /etc/services for resolving service names (http, https, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libuv1 \
     netbase \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /etc
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy built binary from builder stage
 COPY --from=builder /build/src/rinetd-uv /usr/sbin/rinetd-uv
